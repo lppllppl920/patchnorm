@@ -63,6 +63,7 @@ class PatchNormConv2D(keras.layers.Layer):
     self.activity_regularizer = activity_regularizer
     self.kernel_constraint = kernel_constraint
     self.bias_constraint = bias_constraint
+    self.axis = axis
 
     assert self.padding == 'same' or self.kernel_size == (1, 1), 'todo: padding != same'
     assert self.axis == 3, 'todo: axis != 3'
