@@ -27,6 +27,7 @@ class PatchNormConv2D(keras.layers.Layer):
             activity_regularizer=None,
             kernel_constraint=None,
             bias_constraint=None,
+            axis=3,
             **kwargs):
         """Patch-wise batch norm + convolution.
 
@@ -60,7 +61,8 @@ class PatchNormConv2D(keras.layers.Layer):
         self.bias_constraint = bias_constraint
 
         assert self.padding == 'same' or self.kernel_size == (1, 1), 'todo: padding != same'
-
+        assert self.axis == 3, 'todo: axis != 3'
+        
     def build(self, input_shape):
         self.beta = self.add_weight(
             'beta',
@@ -162,6 +164,7 @@ class EfficientPatchNormConv2D(keras.layers.Layer):
             activity_regularizer=None,
             kernel_constraint=None,
             bias_constraint=None,
+            axis=3,
             **kwargs):
         """Patch-wise batch norm + convolution.
 
@@ -193,11 +196,13 @@ class EfficientPatchNormConv2D(keras.layers.Layer):
         self.activity_regularizer = activity_regularizer
         self.kernel_constraint = kernel_constraint
         self.bias_constraint = bias_constraint
+        self.axis = axis
 
         if self.activation is not None:
           self.act = keras.layers.Activation(self.activation)
           
         assert self.padding == 'same' or self.kernel_size == (1, 1), 'todo: padding != same'
+        assert self.axis == 3, 'todo: axis != 3'
 
     def build(self, input_shape):
         # TODO: Both pairs of beta and gamma setting work fine. (seems like filters one converge a bit faster?)

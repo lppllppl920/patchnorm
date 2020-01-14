@@ -9,3 +9,8 @@ If you have the right permissions:
 python3 -m pip install git+ssh://git@github.com/benjamindkilleen/patchnorm.git --user
 ```
 
+## Usage
+
+```python
+from patchnorm import PatchNormConv2D, EfficientPatchNormConv2D
+```
