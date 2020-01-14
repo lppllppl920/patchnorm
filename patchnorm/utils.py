@@ -2,6 +2,7 @@ from .patchnorm import PatchNormConv2D
 from .patchnorm import EfficientPatchNormConv2D
 from tensorflow import keras
 
+
 def tuplify(val, length):
   if type(val) in [tuple, list] and len(val) == length:
     return tuple(val)
