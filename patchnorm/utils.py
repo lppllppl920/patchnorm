@@ -1,6 +1,5 @@
-from .patchnorm import PatchNormConv2D
-from .patchnorm import EfficientPatchNormConv2D
 from tensorflow import keras
+from patch_norm_conv import PatchNormConv2D
 
 
 def tuplify(val, length):
