@@ -182,13 +182,13 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
       # TODO: Both pairs of beta and gamma setting work fine. (seems like filters one converge a bit faster?)
     self.beta = self.add_weight(
       'beta',
-      shape=(1, 1, 1, self.filters),
+      shape=(self.filters),
       dtype=tf.float32,
       trainable=True,
       initializer=tf.constant_initializer(0))
     self.gamma = self.add_weight(
       'gamma',
-      shape=(1, 1, 1, self.filters),
+      shape=(self.filters),
       dtype=tf.float32,
       trainable=True,
       initializer=tf.constant_initializer(1))
