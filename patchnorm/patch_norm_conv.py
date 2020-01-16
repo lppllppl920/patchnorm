@@ -202,12 +202,9 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
       activation=None,
       use_bias=False,
       kernel_initializer=self.kernel_initializer,
-      bias_initializer=self.bias_initializer,
       kernel_regularizer=self.kernel_regularizer,
-      bias_regularizer=self.bias_regularizer,
       activity_regularizer=self.activity_regularizer,
-      kernel_constraint=self.kernel_constraint,
-      bias_constraint=self.bias_constraint)
+      kernel_constraint=self.kernel_constraint)
 
     if self.use_bias:
       self.bias = self.add_weight(
@@ -252,3 +249,14 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
       x = self.act(x)
 
     return x
+
+  def set_weights_from_conv(self, weights):
+    """Set the weights as from a convolutional layer.
+
+    :param weights:
+    :returns:
+    :rtype:
+
+    """
+    self.conv.set_weights(weights[0])
+    self.bias.assign(weights[1])
