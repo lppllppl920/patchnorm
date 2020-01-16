@@ -258,5 +258,5 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     :rtype:
 
     """
-    self.conv.set_weights(weights[0])
-    self.bias.assign(weights[1])
+    self.conv.set_weights([weights[0]])
+    self.bias.assign([weights[1]])
