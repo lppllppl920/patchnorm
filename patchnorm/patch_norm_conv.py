@@ -4,6 +4,9 @@ from tensorflow import keras
 from . import utils
 
 
+logger = tf.get_logger()
+
+
 class PatchNormConv2D(keras.layers.Layer):
   """Notes:
 
@@ -134,8 +137,8 @@ class PatchNormConv2D(keras.layers.Layer):
                    'axis': self.axis})
     return config
 
-  def set_conv_weights(self, weights):
-    """Set the weights for the internal conv layer.
+  def set_weights_from_conv(self, weights):
+    """Set the weights as from a convolutional layer.
 
     :param weights:
     :returns:
@@ -144,6 +147,31 @@ class PatchNormConv2D(keras.layers.Layer):
     """
     self.conv.set_weights(weights)
 
+  def set_weights_from_bn(self, weights):
+    """Sets beta and gamma from `weights` as returned by a BatchNormalization layer.
+
+    Note that the BatchNormalization includes a running mean and variance which PatchNorm does not use. These are ignored.
+
+    Note also that this only works when beta and gamma have `filters` elements. If this is not the case, this function prints a warning.
+
+    Assumes that the get_weights() function has returned the list with [beta, gamma, moving_mean, moving_variance].
+
+    :param weights: 
+    :returns: 
+    :rtype: 
+
+    """
+    gamma = weights[0]
+    beta = weights[1]
+
+    if gamma.shape == self.gamma.shape and beta.shape == self.beta.shape:
+      self.gamma.assign(gamma)
+      self.beta.assign(beta)
+      logger.info('successfully set pn beta + gamma weights')
+    else:
+      logger.warning('shape mismatch between weights')
+    
+    
 
 class EfficientPatchNormConv2D(PatchNormConv2D):
   def build(self, input_shape):
