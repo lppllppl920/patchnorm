@@ -147,7 +147,7 @@ class PatchNormConv2D(keras.layers.Layer):
     """
     self.conv.set_weights(weights)
 
-  def set_weights_from_bn(self, weights):
+  def set_weights_from_bn(self, weights, silent=False):
     """Sets beta and gamma from `weights` as returned by a BatchNormalization layer.
 
     Note that the BatchNormalization includes a running mean and variance which PatchNorm does not use. These are ignored.
@@ -157,6 +157,7 @@ class PatchNormConv2D(keras.layers.Layer):
     Assumes that the get_weights() function has returned the list with [beta, gamma, moving_mean, moving_variance].
 
     :param weights: 
+    :param silent: ignore warnings
     :returns: 
     :rtype: 
 
@@ -165,9 +166,11 @@ class PatchNormConv2D(keras.layers.Layer):
     beta = weights[1]
 
     if gamma.shape != self.gamma.shape:
-      logger.warning('shape mismatch between gamma and self.gamma: {} != {}'.format(gamma.shape, self.gamma.shape))
+      if not silent:
+        logger.warning('shape mismatch between gamma and self.gamma: {} != {}'.format(gamma.shape, self.gamma.shape))
     elif beta.shape != self.beta.shape:
-      logger.warning('shape mismatch between beta and self.beta: {} != {}'.format(beta.shape, self.beta.shape))
+      if not silent:
+        logger.warning('shape mismatch between beta and self.beta: {} != {}'.format(beta.shape, self.beta.shape))
     else:
       self.gamma.assign(gamma)
       self.beta.assign(beta)
@@ -207,7 +210,6 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
       bias_constraint=self.bias_constraint)
 
     if self.use_bias:
-      raise NotImplementedError('use_bias must be False')
       self.bias = self.add_weight(
         'bias',
         shape=(self.filters,),
@@ -244,7 +246,7 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     x = self.gamma * x + self.beta * kernel_summation
 
     if self.use_bias:
-      x += self.bias
+      x += tf.reshape(self.bias, (1, 1, 1, -1))
 
     if self.activation is not None:
       x = self.act(x)
