@@ -259,4 +259,4 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
 
     """
     self.conv.set_weights([weights[0]])
-    self.bias.assign([weights[1]])
+    self.bias.assign(weights[1])
