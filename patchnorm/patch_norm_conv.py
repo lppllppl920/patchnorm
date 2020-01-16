@@ -165,9 +165,9 @@ class PatchNormConv2D(keras.layers.Layer):
     beta = weights[1]
 
     if gamma.shape != self.gamma.shape:
-      logger.warning('shape mismatch between gamma and self.gamma: {gamma.shape} != {self.gamma.shape}')
+      logger.warning('shape mismatch between gamma and self.gamma: {} != {}'.format(gamma.shape, self.gamma.shape))
     elif beta.shape != self.beta.shape:
-      logger.warning('shape mismatch between beta and self.beta: {beta.shape} != {self.beta.shape}')
+      logger.warning('shape mismatch between beta and self.beta: {} != {}'.format(beta.shape, self.beta.shape))
     else:
       self.gamma.assign(gamma)
       self.beta.assign(beta)
