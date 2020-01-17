@@ -112,8 +112,8 @@ class PatchNormConv2D(keras.layers.Layer):
     patches = tf.reshape(patches, (-1, patches.shape[1], patches.shape[2], self.kernel_size[0], self.kernel_size[1], x.shape[3]))
     
     # (N, H', W', 1, 1, 1)
-    mus = tf.math.reduce_mean(patches, axis=3, keepdims=True)
-    sigs = tf.math.reduce_std(patches, axis=3, keepdims=True)
+    mus = tf.math.reduce_mean(patches, axis=(3, 4, 5), keepdims=True)
+    sigs = tf.math.reduce_std(patches, axis=(3, 4, 5), keepdims=True)
 
     # (N, H', W', 1, 1, 1)
     centered = (patches - mus) / tf.sqrt(tf.square(sigs) + self.epsilon)
