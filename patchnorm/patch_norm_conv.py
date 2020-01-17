@@ -73,10 +73,12 @@ class PatchNormConv2D(keras.layers.Layer):
 
   def build(self, input_shape):
     self.beta = self.add_weight('beta',
+                                shape=(input_shape[3],),
                                 dtype=tf.float32,
                                 trainable=True,
                                 initializer=tf.constant_initializer(0))
     self.gamma = self.add_weight('gamma',
+                                 shape=(input_shape[3],),
                                  dtype=tf.float32,
                                  trainable=True,
                                  initializer=tf.constant_initializer(1))
@@ -98,27 +100,29 @@ class PatchNormConv2D(keras.layers.Layer):
       bias_constraint=self.bias_constraint)
 
   def call(self, x):
+    # (N, H', W', h * w * C)
     patches = tf.image.extract_patches(
       images=x,
       sizes=[1, self.kernel_size[0], self.kernel_size[1], 1],
       strides=[1, self.strides[0], self.strides[1], 1],
       rates=[1, 1, 1, 1],
-      padding=self.padding.upper())
-    # approximately [N, H, W, h * w * C] (if stride is 1 and padding is 'same')
+      padding=self.padding.upper())    
 
-    # (N, H, W, 1)
+    # (N, H', W', h, w, C)
+    patches = tf.reshape(patches, (-1, patches.shape[1], patches.shape[2], self.kernel_size[0], self.kernel_size[1], x.shape[3]))
+    
+    # (N, H', W', 1, 1, 1)
     mus = tf.math.reduce_mean(patches, axis=3, keepdims=True)
     sigs = tf.math.reduce_std(patches, axis=3, keepdims=True)
 
+    # (N, H', W', 1, 1, 1)
     centered = (patches - mus) / tf.sqrt(tf.square(sigs) + self.epsilon)
-    shifted = self.gamma * centered + self.beta
-    shifted = tf.reshape(shifted, [-1, shifted.shape[1], shifted.shape[2],
-                                   self.kernel_size[0], self.kernel_size[1], x.shape[3]])
+    shifted = tf.reshape(self.gamma, (1, 1, 1, 1, 1, -1)) * centered + tf.reshape(self.beta, (1, 1, 1, 1, 1, -1))
 
-    shifted_t = tf.transpose(shifted, perm=[0, 1, 3, 2, 4, 5])
-    shifted_flat = tf.reshape(shifted_t, [-1, shifted.shape[1] * self.kernel_size[0],
-                                          shifted.shape[2] * self.kernel_size[1], x.shape[3]])
-    return self.conv(shifted_flat)
+    # (N, H', h, W', w, C)
+    shifted = tf.transpose(shifted, perm=[0, 1, 3, 2, 4, 5])
+    shifted = tf.reshape(shifted, [-1, shifted.shape[1] * self.kernel_size[0], shifted.shape[2] * self.kernel_size[1], x.shape[3]])
+    return self.conv(shifted)
 
   def get_config(self):
     config = super().get_config()
