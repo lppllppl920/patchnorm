@@ -183,23 +183,55 @@ class PatchNormConv2D(keras.layers.Layer):
     
   def unfreeze_weights(self):
     self.conv.trainable = True
-    self.beta.trainable = True
-    self.gamma.trainable = True
 
 
+class BiasAdd(keras.layers.Layer):
+  """A simple layer that adds a bias along the channel dimension.
+
+  Included so as to make bias weights non-trainable for EfficientPatchNormConv2D.
+
+  """
+  def __init__(self, initializer=None, regularizer=None, constraint=None, **kwargs):
+    super().__init__(**kwargs)
+    self.initializer = initializer
+    self.regularizer = regularizer
+    self.constraint = constraint
+
+  def build(self, input_shape):
+    self.bias = self.add_weight(
+      'bias',
+      shape=(input_shape[3],),
+      initializer=self.initializer,
+      regularizer=self.regularizer,
+      constraint=self.constraint,
+      trainable=True,
+      dtype=self.dtype)
+
+  def call(self, x):
+    x += tf.reshape(self.bias, (1, 1, 1, -1))
+    return x
+
+  def get_config(self):
+    config = super().get_config()
+    config.update({'initializer': self.initializer,
+                   'regularizer': self.regularizer,
+                   'constraint': self.constraint})
+    return config
+    
+    
 class EfficientPatchNormConv2D(PatchNormConv2D):
   def build(self, input_shape):
       # TODO: Both pairs of beta and gamma setting work fine. (seems like filters one converge a bit faster?)
     self.beta = self.add_weight(
       'beta',
       shape=(self.filters),
-      dtype=tf.float32,
+      dtype=self.dtype,
       trainable=True,
       initializer=tf.constant_initializer(0))
     self.gamma = self.add_weight(
       'gamma',
       shape=(self.filters),
-      dtype=tf.float32,
+      dtype=self.dtype,
       trainable=True,
       initializer=tf.constant_initializer(1))
     self.epsilon = tf.constant(1e-5, tf.float32)
@@ -214,17 +246,15 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
       kernel_initializer=self.kernel_initializer,
       kernel_regularizer=self.kernel_regularizer,
       activity_regularizer=self.activity_regularizer,
-      kernel_constraint=self.kernel_constraint)
+      kernel_constraint=self.kernel_constraint,
+      dtype=self.dtype)
 
     if self.use_bias:
-      self.bias = self.add_weight(
-        'bias',
-        shape=(self.filters,),
+      self.bias = BiasAdd(
         initializer=self.bias_initializer,
         regularizer=self.bias_regularizer,
         constraint=self.bias_constraint,
-        trainable=True,
-        dtype=tf.float32)
+        dtype=self.dtype)
 
     if self.activation is not None:
       self.act = keras.layers.Activation(self.activation)
@@ -253,7 +283,7 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     x = self.gamma * x + self.beta * kernel_summation
 
     if self.use_bias:
-      x += tf.reshape(self.bias, (1, 1, 1, -1))
+      x = self.bias(x)
 
     if self.activation is not None:
       x = self.act(x)
@@ -269,16 +299,16 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
 
     """
     self.conv.set_weights([weights[0]])
-    self.bias.assign(weights[1])
+    self.bias.set_weights([weights[1]])
 
   def freeze_weights_except_norm(self):
     """Freeze the weights in this layer except for beta and gamma.
     """
     self.conv.trainable = False
-    self.bias.trainable = False
+    if self.use_bias:
+      self.bias.trainable = False
 
   def unfreeze_weights(self):
     self.conv.trainable = True
-    self.bias.trainable = True
-    self.beta.trainable = True
-    self.gamma.trainable = True    
+    if self.use_bias:
+      self.bias.trainable = True
