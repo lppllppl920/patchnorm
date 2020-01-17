@@ -175,7 +175,17 @@ class PatchNormConv2D(keras.layers.Layer):
       self.gamma.assign(gamma)
       self.beta.assign(beta)
       logger.info('successfully set pn beta + gamma weights')
+
+  def freeze_weights_except_norm(self):
+    """Freeze the weights in this layer except for beta and gamma.
+    """
+    self.conv.trainable = False
     
+  def unfreeze_weights(self):
+    self.conv.trainable = True
+    self.beta.trainable = True
+    self.gamma.trainable = True
+
 
 class EfficientPatchNormConv2D(PatchNormConv2D):
   def build(self, input_shape):
@@ -260,3 +270,15 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     """
     self.conv.set_weights([weights[0]])
     self.bias.assign(weights[1])
+
+  def freeze_weights_except_norm(self):
+    """Freeze the weights in this layer except for beta and gamma.
+    """
+    self.conv.trainable = False
+    self.bias.trainable = False
+
+  def unfreeze_weights(self):
+    self.conv.trainable = True
+    self.bias.trainable = True
+    self.beta.trainable = True
+    self.gamma.trainable = True    
