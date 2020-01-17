@@ -106,6 +106,7 @@ class PatchNormConv2D(keras.layers.Layer):
       padding=self.padding.upper())
     # approximately [N, H, W, h * w * C] (if stride is 1 and padding is 'same')
 
+    # (N, H, W, 1)
     mus = tf.math.reduce_mean(patches, axis=3, keepdims=True)
     sigs = tf.math.reduce_std(patches, axis=3, keepdims=True)
 
@@ -222,18 +223,24 @@ class BiasAdd(keras.layers.Layer):
 class EfficientPatchNormConv2D(PatchNormConv2D):
   def build(self, input_shape):
       # TODO: Both pairs of beta and gamma setting work fine. (seems like filters one converge a bit faster?)
-    self.beta = self.add_weight(
-      'beta',
-      shape=(self.filters),
+    # self.beta = self.add_weight(
+    #   'beta',
+    #   shape=(self.filters),
+    #   dtype=self.dtype,
+    #   trainable=True,
+    #   initializer=tf.constant_initializer(0))
+    # self.gamma = self.add_weight(
+    #   'gamma',
+    #   shape=(self.filters),
+    #   dtype=self.dtype,
+    #   trainable=True,
+    #   initializer=tf.constant_initializer(1))
+    self.alpha = self.add_weight(
+      'alpha',
+      shape=(input_shape[3],),
       dtype=self.dtype,
       trainable=True,
-      initializer=tf.constant_initializer(0))
-    self.gamma = self.add_weight(
-      'gamma',
-      shape=(self.filters),
-      dtype=self.dtype,
-      trainable=True,
-      initializer=tf.constant_initializer(1))
+      initializer=tf.constant_initializer(0))  # sort of like a bias, gets multiplied along the in_channels dimension of the conv kernel
     self.epsilon = tf.constant(1e-5, tf.float32)
 
     self.conv = keras.layers.Conv2D(
@@ -259,28 +266,32 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     if self.activation is not None:
       self.act = keras.layers.Activation(self.activation)
 
-    factor = 1.0 / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])
-    self.window = factor * tf.ones((self.kernel_size[0], self.kernel_size[1], input_shape[3], 1), dtype=tf.float32)
-    self.var_bias_correction = (input_shape[3] * self.kernel_size[0] * self.kernel_size[1]) / \
-                               (input_shape[3] * self.kernel_size[0] * self.kernel_size[1] - 1.0)
+    self.window = tf.ones((self.kernel_size[0], self.kernel_size[1], input_shape[3], 1), dtype=tf.float32) / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])
+    self.variance_correction = 2.0 / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])
 
   def call(self, x):
     """Implement the patch norm operation using Xingtong's more efficient method.
 
     """
     # (N, H', W', 1)
-    mean_map = tf.nn.conv2d(x, self.window, strides=self.strides, padding=self.padding.upper())
-    mean_sq_map = tf.nn.conv2d(tf.math.square(x), self.window, strides=self.strides, padding=self.padding.upper())
-    std_map = tf.math.sqrt(self.var_bias_correction * (mean_sq_map - tf.math.square(mean_map)) + self.epsilon)
+    means = tf.nn.conv2d(x, self.window, strides=self.strides, padding=self.padding.upper())
+    square_means = tf.nn.conv2d(tf.math.square(x), self.window, strides=self.strides, padding=self.padding.upper())
+    stds = tf.math.sqrt(square_means + tf.math.square(means) * self.variance_correction + self.epsilon)
+    # std_map = tf.math.sqrt(self.var_bias_correction * (mean_sq_map - tf.math.square(mean_map)) + self.epsilon)
 
     # (N, H', W', filters)
-    x = self.conv(x)
+    conv = self.conv(x)
 
     # (1, 1, 1, filters)
-    kernel_summation = tf.reshape(tf.reduce_sum(self.conv.kernel, axis=(0, 1, 2)), (1, 1, 1, -1))  # .read_value()
+    kernel_sum = tf.reduce_sum(self.conv.kernel, axis=(0, 1, 2), keepdims=True)
+    weighted_kernel = self.conv.kernel * tf.reshape(self.alpha, (1, 1, -1, 1))
+    weighted_kernel_sum = tf.reduce_sum(weighted_kernel, axis=(0, 1, 2), keepdims=True)
 
-    x = (x - (mean_map * kernel_summation)) / std_map
-    x = self.gamma * x + self.beta * kernel_summation
+    x = (conv - means * kernel_sum) / stds + weighted_kernel_sum
+    
+    # Xingtong:
+    # x = (x - (mean_map * kernel_summation)) / std_map
+    # x = self.gamma * x + self.beta * kernel_summation
 
     if self.use_bias:
       x = self.bias(x)
@@ -312,3 +323,6 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     self.conv.trainable = True
     if self.use_bias:
       self.bias.trainable = True
+
+  def set_weights_from_bn(self, weights, silent=False):
+    raise NotImplementedError
