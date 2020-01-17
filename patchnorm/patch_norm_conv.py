@@ -121,7 +121,9 @@ class PatchNormConv2D(keras.layers.Layer):
 
     # (N, H', h, W', w, C)
     shifted = tf.transpose(shifted, perm=[0, 1, 3, 2, 4, 5])
-    shifted = tf.reshape(shifted, [-1, shifted.shape[1] * self.kernel_size[0], shifted.shape[2] * self.kernel_size[1], x.shape[3]])
+    shifted = tf.reshape(shifted, [-1, shifted.shape[1] * shifted.shape[2], shifted.shape[3] * shifted.shape[4], shifted.shape[5]])
+
+    # (N, H', W', filters)
     return self.conv(shifted)
 
   def get_config(self):
