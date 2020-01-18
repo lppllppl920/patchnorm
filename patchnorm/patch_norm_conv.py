@@ -74,12 +74,12 @@ class PatchNormConv2D(keras.layers.Layer):
   def build(self, input_shape):
     self.beta = self.add_weight('beta',
                                 shape=(input_shape[3],),
-                                dtype=tf.float32,
+                                dtype=self.dtype,
                                 trainable=True,
                                 initializer=tf.constant_initializer(0))
     self.gamma = self.add_weight('gamma',
                                  shape=(input_shape[3],),
-                                 dtype=tf.float32,
+                                 dtype=self.dtype,
                                  trainable=True,
                                  initializer=tf.constant_initializer(1))
     self.epsilon = tf.constant(1e-5, tf.float32)
@@ -228,19 +228,6 @@ class BiasAdd(keras.layers.Layer):
     
 class EfficientPatchNormConv2D(PatchNormConv2D):
   def build(self, input_shape):
-      # TODO: Both pairs of beta and gamma setting work fine. (seems like filters one converge a bit faster?)
-    # self.beta = self.add_weight(
-    #   'beta',
-    #   shape=(self.filters),
-    #   dtype=self.dtype,
-    #   trainable=True,
-    #   initializer=tf.constant_initializer(0))
-    # self.gamma = self.add_weight(
-    #   'gamma',
-    #   shape=(self.filters),
-    #   dtype=self.dtype,
-    #   trainable=True,
-    #   initializer=tf.constant_initializer(1))
     self.alpha = self.add_weight(
       'alpha',
       shape=(input_shape[3],),
@@ -272,7 +259,7 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     if self.activation is not None:
       self.act = keras.layers.Activation(self.activation)
 
-    self.window = tf.ones((self.kernel_size[0], self.kernel_size[1], input_shape[3], 1), dtype=tf.float32) / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])
+    self.window = tf.ones((self.kernel_size[0], self.kernel_size[1], input_shape[3], 1), dtype=self.dtype) / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])
     self.variance_correction = 2.0 / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])
 
   def call(self, x):
