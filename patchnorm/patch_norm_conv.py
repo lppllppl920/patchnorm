@@ -14,6 +14,7 @@ class PatchNormConv2D(keras.layers.Layer):
   compute these values over the inputs for each image patch, for a single image input.
 
   """
+  epsilon = 1e-5
 
   def __init__(self,
                filters,
@@ -84,7 +85,6 @@ class PatchNormConv2D(keras.layers.Layer):
                                  dtype=self.dtype,
                                  trainable=True,
                                  initializer=tf.constant_initializer(1))
-    self.epsilon = tf.constant(1e-5, self.dtype)
 
     self.conv = keras.layers.Conv2D(
       filters=self.filters,
@@ -236,7 +236,6 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
       dtype=self.dtype,
       trainable=True,
       initializer=tf.constant_initializer(0))  # sort of like a bias, gets multiplied along the in_channels dimension of the conv kernel
-    self.epsilon = tf.constant(1e-5, self.dtype)
 
     self.conv = keras.layers.Conv2D(
       filters=self.filters,
