@@ -30,6 +30,7 @@ class PatchNormConv2D(keras.layers.Layer):
                kernel_constraint=None,
                bias_constraint=None,
                axis=3,
+               patch_size=None,
                **kwargs):
     """Patch norm + convolution.
 
@@ -67,8 +68,9 @@ class PatchNormConv2D(keras.layers.Layer):
     self.kernel_constraint = kernel_constraint
     self.bias_constraint = bias_constraint
     self.axis = axis
+    self.patch_size = self.kernel_size if patch_size is None else utils.tuplify(patch_size, 2)
 
-    assert self.padding == 'same' or self.kernel_size == (1, 1), 'todo: padding != same'
+    assert self.padding == 'same' or self.kernel_size == (1, 1), 'todo: padding != same, especially for patch_size != kernel_size'
     assert self.axis == 3, 'todo: axis != 3'
 
   def build(self, input_shape):
@@ -103,10 +105,10 @@ class PatchNormConv2D(keras.layers.Layer):
     # (N, H', W', h * w * C)
     patches = tf.image.extract_patches(
       images=x,
-      sizes=[1, self.kernel_size[0], self.kernel_size[1], 1],
+      sizes=[1, self.patch_size[0], self.patch_size[1], 1],
       strides=[1, self.strides[0], self.strides[1], 1],
       rates=[1, 1, 1, 1],
-      padding=self.padding.upper())    
+      padding=self.padding.upper())
 
     # (N, H', W', h, w, C)
     patches = tf.reshape(patches, (-1, patches.shape[1], patches.shape[2], self.kernel_size[0], self.kernel_size[1], x.shape[3]))
@@ -259,18 +261,26 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     if self.activation is not None:
       self.act = keras.layers.Activation(self.activation)
 
-    self.window = tf.ones((self.kernel_size[0], self.kernel_size[1], input_shape[3], 1), dtype=self.dtype) / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])
-    self.variance_correction = 2.0 / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])
+    self.box = keras.layers.Conv2D(
+      filters=1,
+      kernel_size=self.patch_size,
+      strides=self.strides,
+      padding=self.padding,
+      activation=None,
+      use_bias=False,
+      kernel_initializer=keras.initializers.Constant(1 / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])),
+      trainable=False)
+    
+    self.variance_correction = 2.0 / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])  # python scalar
 
   def call(self, x):
     """Implement the patch norm operation using Xingtong's more efficient method.
 
     """
     # (N, H', W', 1)
-    means = tf.nn.conv2d(x, self.window, strides=self.strides, padding=self.padding.upper())
-    square_means = tf.nn.conv2d(tf.math.square(x), self.window, strides=self.strides, padding=self.padding.upper())
+    means = self.box(x)
+    square_means = self.box(tf.math.square(x))
     stds = tf.math.sqrt(square_means + tf.math.square(means) * self.variance_correction + self.epsilon)
-    # std_map = tf.math.sqrt(self.var_bias_correction * (mean_sq_map - tf.math.square(mean_map)) + self.epsilon)
 
     # (N, H', W', filters)
     conv = self.conv(x)
@@ -281,10 +291,6 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     weighted_kernel_sum = tf.reduce_sum(weighted_kernel, axis=(0, 1, 2), keepdims=True)
 
     x = (conv - means * kernel_sum) / stds + weighted_kernel_sum
-    
-    # Xingtong:
-    # x = (x - (mean_map * kernel_summation)) / std_map
-    # x = self.gamma * x + self.beta * kernel_summation
 
     if self.use_bias:
       x = self.bias(x)
