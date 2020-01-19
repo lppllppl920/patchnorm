@@ -82,7 +82,7 @@ class PatchNormConv2D(keras.layers.Layer):
                                  dtype=self.dtype,
                                  trainable=True,
                                  initializer=tf.constant_initializer(1))
-    self.epsilon = tf.constant(1e-5, tf.float32)
+    self.epsilon = tf.constant(1e-5, self.dtype)
 
     self.conv = keras.layers.Conv2D(
       filters=self.filters,
@@ -234,7 +234,7 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
       dtype=self.dtype,
       trainable=True,
       initializer=tf.constant_initializer(0))  # sort of like a bias, gets multiplied along the in_channels dimension of the conv kernel
-    self.epsilon = tf.constant(1e-5, tf.float32)
+    self.epsilon = tf.constant(1e-5, self.dtype)
 
     self.conv = keras.layers.Conv2D(
       filters=self.filters,
