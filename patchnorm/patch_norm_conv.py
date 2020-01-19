@@ -230,6 +230,7 @@ class BiasAdd(keras.layers.Layer):
     
 class EfficientPatchNormConv2D(PatchNormConv2D):
   def build(self, input_shape):
+    logger.debug(f'dtype: {self.dtype}')
     self.alpha = self.add_weight(
       'alpha',
       shape=(input_shape[3],),
