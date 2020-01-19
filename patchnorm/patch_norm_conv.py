@@ -230,7 +230,6 @@ class BiasAdd(keras.layers.Layer):
     
 class EfficientPatchNormConv2D(PatchNormConv2D):
   def build(self, input_shape):
-    # print(f'dtype: {self.dtype}')
     self.alpha = self.add_weight(
       'alpha',
       shape=(input_shape[3],),
@@ -283,12 +282,8 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     # (N, H', W', filters)
     conv = self.conv(x)
 
-    print('kernel:', self.conv.kernel.dtype)
-    print('alpha:', self.alpha.dtype)
-    
     # (1, 1, 1, filters)
     kernel_sum = tf.reduce_sum(self.conv.kernel, axis=(0, 1, 2), keepdims=True)
-    print('kernel_sum:', kernel_sum.dtype)
     weighted_kernel = self.conv.kernel * tf.reshape(self.alpha, (1, 1, -1, 1))
     weighted_kernel_sum = tf.reduce_sum(weighted_kernel, axis=(0, 1, 2), keepdims=True)
     
