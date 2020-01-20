@@ -143,7 +143,8 @@ class PatchNormConv2D(keras.layers.Layer):
                    'activity_regularizer': self.activity_regularizer,
                    'kernel_constraint': self.kernel_constraint,
                    'bias_constraint': self.bias_constraint,
-                   'axis': self.axis})
+                   'axis': self.axis,
+                   'patch_size': self.patch_size})
     return config
 
   def set_weights_from_conv(self, weights):
