@@ -259,17 +259,17 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     if self.activation is not None:
       self.act = keras.layers.Activation(self.activation)
 
-    # self.box = keras.layers.Conv2D(
-    #   filters=1,
-    #   kernel_size=self.patch_size,
-    #   strides=self.strides,
-    #   padding=self.padding,
-    #   activation=None,
-    #   use_bias=False,
-    #   kernel_initializer=keras.initializers.Constant(1 / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])),
-    #   trainable=False)
+    self.box = keras.layers.Conv2D(
+      filters=1,
+      kernel_size=self.patch_size,
+      strides=self.strides,
+      padding=self.padding,
+      activation=None,
+      use_bias=False,
+      kernel_initializer=keras.initializers.Constant(1 / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])),
+      trainable=False)
 
-    self.window = tf.ones((self.kernel_size[0], self.kernel_size[1], input_shape[3], 1), dtype=self.dtype) / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])
+    # self.window = tf.ones((self.kernel_size[0], self.kernel_size[1], input_shape[3], 1), dtype=self.dtype) / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])
     self.variance_correction = 2.0 / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])  # python scalar
 
   def call(self, x):
@@ -277,10 +277,10 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
 
     """
     # (N, H', W', 1)
-    # means = self.box(x)
-    # square_means = self.box(tf.math.square(x))
-    means = tf.nn.conv2d(x, self.window, strides=self.strides, padding=self.padding.upper())
-    square_means = tf.nn.conv2d(tf.math.square(x), self.window, strides=self.strides, padding=self.padding.upper())
+    means = self.box(x)
+    square_means = self.box(tf.math.square(x))
+    # means = tf.nn.conv2d(x, self.window, strides=self.strides, padding=self.padding.upper())
+    # square_means = tf.nn.conv2d(tf.math.square(x), self.window, strides=self.strides, padding=self.padding.upper())
     stds = tf.math.sqrt(square_means + tf.math.square(means) * self.variance_correction + self.epsilon)
     
 
