@@ -300,13 +300,18 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     # (N, H', W', 1)
     kernel_factor = tf.reshape(self.beta, (1, 1, 1, -1)) - means * tf.reshape(self.gamma, (1, 1, 1, -1)) / stds
 
-    # (N, H', W', 1, 1, 1, 1) x (1, 1, 1, h, w, C, filters) = (N, H', W', h, w, C, filters)
+    # get shapes
     _, H_, W_, _ = kernel_factor.shape
     h, w, C, filters = self.conv.kernel.shape
-    weighted_kernel_image = tf.reshape(kernel_factor, (-1, H_, W_, 1, 1, 1, 1)) * tf.reshape(self.conv.kernel, (1, 1, 1, h, w, C, filters))
+
+    # (1, 1, 1, C, filters)
+    kernel_sum = tf.reshape(tf.reduce_sum(self.conv.kernel, axis=(0, 1)), (1, 1, 1, C, filters))
+
+    # (N, H', W', 1, 1) x (1, 1, 1, C, filters) = (N, H', W', C, filters)
+    weighted_kernel_image = tf.expand_dims(kernel_factor, -1) * kernel_sum
 
     # (N, H', W', filters)
-    kernel_sum = tf.reduce_sum(weighted_kernel_image, axis=(3, 4, 5))
+    kernel_sum = tf.reduce_sum(weighted_kernel_image, axis=3)
     x = conv + kernel_sum
     
     # reduced patch norm conv? (not used)
