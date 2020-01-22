@@ -14,7 +14,6 @@ class PatchNormConv2D(keras.layers.Layer):
   compute these values over the inputs for each image patch, for a single image input.
 
   """
-  epsilon = 1e-5
 
   def __init__(self,
                filters,
@@ -32,6 +31,7 @@ class PatchNormConv2D(keras.layers.Layer):
                bias_constraint=None,
                axis=3,
                patch_size=None,
+               epsilon=0.001,
                **kwargs):
     """Patch norm + convolution.
 
@@ -70,6 +70,7 @@ class PatchNormConv2D(keras.layers.Layer):
     self.bias_constraint = bias_constraint
     self.axis = axis
     self.patch_size = self.kernel_size if patch_size is None else utils.tuplify(patch_size, 2)
+    self.epsilon = epsilon
 
     assert self.padding == 'same' or self.kernel_size == (1, 1), 'todo: padding != same, especially for patch_size != kernel_size'
     assert self.axis == 3, 'todo: axis != 3'
