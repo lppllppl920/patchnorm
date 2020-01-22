@@ -115,11 +115,11 @@ class PatchNormConv2D(keras.layers.Layer):
     patches = tf.reshape(patches, (-1, patches.shape[1], patches.shape[2], self.kernel_size[0], self.kernel_size[1], x.shape[3]))
     
     # (N, H', W', 1, 1, 1)
-    mus = tf.math.reduce_mean(patches, axis=(3, 4, 5), keepdims=True)
-    sigs = tf.math.reduce_std(patches, axis=(3, 4, 5), keepdims=True)
+    means = tf.math.reduce_mean(patches, axis=(3, 4, 5), keepdims=True)
+    stds = tf.math.reduce_std(patches, axis=(3, 4, 5), keepdims=True)
 
     # (N, H', W', 1, 1, 1)
-    centered = (patches - mus) / tf.sqrt(tf.square(sigs) + self.epsilon)
+    centered = (patches - means) / tf.sqrt(tf.square(stds) + self.epsilon)
     shifted = tf.reshape(self.gamma, (1, 1, 1, 1, 1, -1)) * centered + tf.reshape(self.beta, (1, 1, 1, 1, 1, -1))
 
     # (N, H', h, W', w, C)
@@ -251,15 +251,6 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
       activity_regularizer=self.activity_regularizer,
       kernel_constraint=self.kernel_constraint)
 
-    if self.use_bias:
-      self.bias = BiasAdd(
-        initializer=self.bias_initializer,
-        regularizer=self.bias_regularizer,
-        constraint=self.bias_constraint)
-
-    if self.activation is not None:
-      self.act = keras.layers.Activation(self.activation)
-
     self.box = keras.layers.Conv2D(
       filters=1,
       kernel_size=self.patch_size,
@@ -272,6 +263,15 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
 
     window_size = input_shape[3] * self.kernel_size[0] * self.kernel_size[1]
     self.variance_correction = window_size / (window_size - 1)
+
+    if self.use_bias:
+      self.bias = BiasAdd(
+        initializer=self.bias_initializer,
+        regularizer=self.bias_regularizer,
+        constraint=self.bias_constraint)
+
+    if self.activation is not None:
+      self.act = keras.layers.Activation(self.activation)
 
   def call(self, x):
     """Implement the patch norm operation using Xingtong's more efficient method.
