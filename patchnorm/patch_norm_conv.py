@@ -232,24 +232,24 @@ class BiasAdd(keras.layers.Layer):
     
 class EfficientPatchNormConv2D(PatchNormConv2D):
   def build(self, input_shape):
-    # self.alpha = self.add_weight(
-    #   'alpha',
+    self.alpha = self.add_weight(
+      'alpha',
+      shape=(input_shape[3],),
+      dtype=self.dtype,
+      trainable=True,
+      initializer=tf.constant_initializer(0))  # sort of like a bias, gets multiplied along the in_channels dimension of the conv kernel
+    # self.beta = self.add_weight(
+    #   'beta',
     #   shape=(input_shape[3],),
     #   dtype=self.dtype,
     #   trainable=True,
-    #   initializer=tf.constant_initializer(0))  # sort of like a bias, gets multiplied along the in_channels dimension of the conv kernel
-    self.beta = self.add_weight(
-      'beta',
-      shape=(input_shape[3],),
-      dtype=self.dtype,
-      trainable=True,
-      initializer=tf.constant_initializer(0))
-    self.gamma = self.add_weight(
-      'gamma',
-      shape=(input_shape[3],),
-      dtype=self.dtype,
-      trainable=True,
-      initializer=tf.constant_initializer(1))
+    #   initializer=tf.constant_initializer(0))
+    # self.gamma = self.add_weight(
+    #   'gamma',
+    #   shape=(input_shape[3],),
+    #   dtype=self.dtype,
+    #   trainable=True,
+    #   initializer=tf.constant_initializer(1))
 
     self.conv = keras.layers.Conv2D(
       filters=self.filters,
@@ -288,6 +288,8 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
   def call(self, x):
     """Implement the patch norm operation using Xingtong's more efficient method.
 
+    TODO: test physically relevant statistics on images
+
     """
     # (N, H', W', 1)
     means = self.box(x)
@@ -295,30 +297,37 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     stds = tf.math.sqrt(self.variance_correction * (square_means - tf.math.square(means)) + self.epsilon)
     
     # (N, H', W', filters)
-    conv = self.conv(tf.reshape(self.gamma, (1, 1, 1, -1)) * x) / stds
+    conv = self.conv(x) / stds
 
-    # (N, H', W', 1)
-    kernel_factor = tf.reshape(self.beta, (1, 1, 1, -1)) - means * tf.reshape(self.gamma, (1, 1, 1, -1)) / stds
+    # # (N, H', W', 1)
+    # kernel_factor = tf.reshape(self.beta, (1, 1, 1, -1)) - means * tf.reshape(self.gamma, (1, 1, 1, -1)) / stds
 
-    # get shapes
-    _, H_, W_, _ = kernel_factor.shape
-    h, w, C, filters = self.conv.kernel.shape
+    # # get shapes
+    # _, H_, W_, _ = kernel_factor.shape
+    # h, w, C, filters = self.conv.kernel.shape
 
-    # (1, 1, 1, C, filters)
-    kernel_sum = tf.reshape(tf.reduce_sum(self.conv.kernel, axis=(0, 1)), (1, 1, 1, C, filters))
+    # # (1, 1, 1, C, filters)
+    # kernel_sum = tf.reshape(tf.reduce_sum(self.conv.kernel, axis=(0, 1)), (1, 1, 1, C, filters))
 
-    # (N, H', W', 1, 1) x (1, 1, 1, C, filters) = (N, H', W', C, filters)
-    weighted_kernel_image = tf.expand_dims(kernel_factor, -1) * kernel_sum
+    # # (N, H', W', 1, 1) x (1, 1, 1, C, filters) = (N, H', W', C, filters)
+    # weighted_kernel_image = tf.expand_dims(kernel_factor, -1) * kernel_sum
+
+    # # (N, H', W', filters)
+    # kernel_sum = tf.reduce_sum(weighted_kernel_image, axis=3)
+    # x = conv + kernel_sum
+    
+    # (1, 1, 1, filters)
+    kernel_sum = tf.reduce_sum(self.conv.kernel, axis=(0, 1, 2), keepdims=True)
 
     # (N, H', W', filters)
-    kernel_sum = tf.reduce_sum(weighted_kernel_image, axis=3)
-    x = conv + kernel_sum
-    
-    # reduced patch norm conv? (not used)
-    # kernel_sum = tf.reduce_sum(self.conv.kernel, axis=(0, 1, 2), keepdims=True)
-    # weighted_kernel = self.conv.kernel * tf.reshape(self.alpha, (1, 1, -1, 1))
-    # weighted_kernel_sum = tf.reduce_sum(weighted_kernel, axis=(0, 1, 2), keepdims=True)
-    # x = (conv - means * kernel_sum) / stds + weighted_kernel_sum
+    kernel_weighted_means = means * kernel_sum / stds
+
+    # (1, 1, 1, filters)
+    weighted_kernel = self.conv.kernel * tf.reshape(self.alpha, (1, 1, -1, 1))
+    weighted_kernel_sum = tf.reduce_sum(weighted_kernel, axis=(0, 1, 2), keepdims=True)
+
+    # (N, H', W', filters)
+    x = conv - kernel_weighted_means + weighted_kernel_sum
 
     if self.use_bias:
       x = self.bias(x)
