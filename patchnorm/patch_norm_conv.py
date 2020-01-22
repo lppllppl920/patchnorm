@@ -269,8 +269,8 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
       kernel_initializer=keras.initializers.Constant(1 / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])),
       trainable=False)
 
-    # self.window = tf.ones((self.kernel_size[0], self.kernel_size[1], input_shape[3], 1), dtype=self.dtype) / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])
-    self.variance_correction = 2.0 / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])  # python scalar
+    window_size = input_shape[3] * self.kernel_size[0] * self.kernel_size[1]
+    self.variance_correction = window_size / (window_size - 1)
 
   def call(self, x):
     """Implement the patch norm operation using Xingtong's more efficient method.
@@ -279,11 +279,8 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     # (N, H', W', 1)
     means = self.box(x)
     square_means = self.box(tf.math.square(x))
-    # means = tf.nn.conv2d(x, self.window, strides=self.strides, padding=self.padding.upper())
-    # square_means = tf.nn.conv2d(tf.math.square(x), self.window, strides=self.strides, padding=self.padding.upper())
-    stds = tf.math.sqrt(square_means + tf.math.square(means) * self.variance_correction + self.epsilon)
+    stds = tf.math.sqrt(self.variance_correction * (square_means - tf.math.square(means)) + self.epsilon)
     
-
     # (N, H', W', filters)
     conv = self.conv(x)
 
