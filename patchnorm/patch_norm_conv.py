@@ -290,7 +290,7 @@ class EquivalentPatchNormConv2D(PatchNormConv2D):
     
     # (N, H', W', filters)
     conv = self.conv(tf.reshape(self.gamma, (1, 1, 1, -1)) * x) / stds
-    
+   
     # (1, 1, 1, filters)
     gamma_kernel_sum = tf.reduce_sum(tf.reshape(self.gamma, (1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2), keepdims=True)
     
@@ -351,9 +351,9 @@ class EquivalentPatchNormConv2D(PatchNormConv2D):
     :rtype: 
 
     """
-    # self.alpha.assign()
-    
-    raise NotImplementedError("TODO: this")
+    own_weights = self.get_weights()
+    weights.append(own_weights[3])
+    self.set_weights(weights)
 
   def get_weights_for_pn(self):
     """Get the weights of this layer for the PatchNormConv2D layer.
