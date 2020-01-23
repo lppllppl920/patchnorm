@@ -230,8 +230,158 @@ class BiasAdd(keras.layers.Layer):
                    'constraint': self.constraint})
     return config
     
-    
 class EfficientPatchNormConv2D(PatchNormConv2D):
+  def build(self, input_shape):
+    self.beta = self.add_weight('beta',
+                                shape=(input_shape[3],),
+                                dtype=self.dtype,
+                                trainable=True,
+                                initializer=tf.constant_initializer(0))
+    self.gamma = self.add_weight('gamma',
+                                 shape=(input_shape[3],),
+                                 dtype=self.dtype,
+                                 trainable=True,
+                                 initializer=tf.constant_initializer(1))
+
+    self.conv = keras.layers.Conv2D(
+      filters=self.filters,
+      kernel_size=self.kernel_size,
+      strides=self.strides,
+      padding=self.padding,
+      activation=None,
+      use_bias=False,
+      kernel_initializer=self.kernel_initializer,
+      kernel_regularizer=self.kernel_regularizer,
+      activity_regularizer=self.activity_regularizer,
+      kernel_constraint=self.kernel_constraint)
+
+    self.box = keras.layers.Conv2D(
+      filters=1,
+      kernel_size=self.patch_size,
+      strides=self.strides,
+      padding=self.padding,
+      activation=None,
+      use_bias=False,
+      kernel_initializer=keras.initializers.Constant(1 / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])),
+      trainable=False)
+
+    window_size = input_shape[3] * self.kernel_size[0] * self.kernel_size[1]
+    self.variance_correction = window_size / (window_size - 1)
+
+    if self.use_bias:
+      self.bias = BiasAdd(
+        initializer=self.bias_initializer,
+        regularizer=self.bias_regularizer,
+        constraint=self.bias_constraint)
+
+    if self.activation is not None:
+      self.act = keras.layers.Activation(self.activation)
+
+  def call(self, x):
+    """Implement the patch norm operation using Xingtong's more efficient method.
+
+    TODO: test against PatchNormConv2D with deterministic conditions
+
+    """
+    # (N, H', W', 1)
+    means = self.box(x)
+    square_means = self.box(tf.math.square(x))
+    stds = tf.math.sqrt(self.variance_correction * (square_means - tf.math.square(means)) + self.epsilon)
+    
+    # (N, H', W', filters)
+    conv = self.conv(tf.reshape(self.gamma, (1, 1, 1, -1)) * x) / stds
+    
+    # (1, 1, 1, filters)
+    gamma_kernel_sum = tf.reduce_sum(tf.reshape(self.gamma, (1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2), keepdims=True)
+    
+
+    # (N, H', W', filters)
+    kernel_weighted_means = means * gamma_kernel_sum / stds
+
+    # (1, 1, 1, filters)
+    beta_kernel_sum = tf.reduce_sum(tf.reshape(self.beta, (1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2), keepdims=True)
+
+    # (N, H', W', filters)
+    x = conv - kernel_weighted_means + beta_kernel_sum
+
+    if self.use_bias:
+      x = self.bias(x)
+
+    if self.activation is not None:
+      x = self.act(x)
+
+    return x
+
+  def set_weights_from_conv(self, weights):
+    """Set the weights as from a convolutional layer.
+
+    :param weights:
+    :returns:
+    :rtype:
+
+    """
+    self.conv.set_weights([weights[0]])
+    if self.use_bias:
+      self.bias.set_weights([weights[1]])
+
+  def freeze_weights_except_norm(self):
+    """Freeze the weights in this layer except for beta and gamma.
+    """
+    self.conv.trainable = False
+    if self.use_bias:
+      self.bias.trainable = False
+
+  def unfreeze_weights(self):
+    self.conv.trainable = True
+    if self.use_bias:
+      self.bias.trainable = True
+
+  def set_weights_from_bn(self, weights, silent=False):
+    raise NotImplementedError
+
+  def set_weights_from_pn(self, weights):
+    """Set the weights of this layer from the PatchNormConv2D layer.
+
+    Set: 
+    self.alpha = pn.beta / pn.gamma
+    self.conv.kernel = pn.kernel / pn.gamma
+
+    :param weights: 
+    :returns: 
+    :rtype: 
+
+    """
+    # self.alpha.assign()
+    
+    raise NotImplementedError("TODO: this")
+
+  def get_weights_for_pn(self):
+    """Get the weights of this layer for the PatchNormConv2D layer.
+
+    Get:
+    pn.beta = self.alpha
+    pn.gamma = 1.0
+    pn.kernel = self.conv.kernel
+
+    :param weights: 
+    :returns: 
+    :rtype: 
+
+    """
+    weights = self.get_weights()
+    beta = weights[0]
+    gamma = weights[1]
+    kernel = weights[2]
+
+    out = [beta, gamma, kernel]
+
+    if self.use_bias:
+      out.append(weights[3])
+
+    return out
+
+  
+class ReducedPatchNormConv2D(EfficientPatchNormConv2D):
   def build(self, input_shape):
     self.alpha = self.add_weight(
       'alpha',
@@ -308,32 +458,6 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
       x = self.act(x)
 
     return x
-
-  def set_weights_from_conv(self, weights):
-    """Set the weights as from a convolutional layer.
-
-    :param weights:
-    :returns:
-    :rtype:
-
-    """
-    self.conv.set_weights([weights[0]])
-    self.bias.set_weights([weights[1]])
-
-  def freeze_weights_except_norm(self):
-    """Freeze the weights in this layer except for beta and gamma.
-    """
-    self.conv.trainable = False
-    if self.use_bias:
-      self.bias.trainable = False
-
-  def unfreeze_weights(self):
-    self.conv.trainable = True
-    if self.use_bias:
-      self.bias.trainable = True
-
-  def set_weights_from_bn(self, weights, silent=False):
-    raise NotImplementedError
 
   def set_weights_from_pn(self, weights):
     """Set the weights of this layer from the PatchNormConv2D layer.
