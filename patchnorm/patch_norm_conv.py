@@ -368,6 +368,8 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     beta = weights[0]
     gamma = np.ones_like(beta)
     kernel = weights[1]
+
+    print([w.shape for w in weights])
     
     out = [beta, gamma, kernel]
 
