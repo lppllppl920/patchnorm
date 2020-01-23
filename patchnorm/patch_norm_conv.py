@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 
@@ -346,4 +347,26 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     :rtype: 
 
     """
+    # self.alpha.assign()
+    
     raise NotImplementedError("TODO: this")
+
+  def get_weights_for_pn(self):
+    """Get the weights of this layer for the PatchNormConv2D layer.
+
+    Get:
+    pn.beta = self.alpha
+    pn.gamma = 1.0
+    pn.kernel = self.conv.kernel
+
+    :param weights: 
+    :returns: 
+    :rtype: 
+
+    """
+    weights = [self.alpha, np.ones_like(self.alpha), self.conv.kernel]
+
+    if self.use_bias:
+      weights.append(self.bias.bias)
+
+    return weights
