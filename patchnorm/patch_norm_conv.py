@@ -333,3 +333,17 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
 
   def set_weights_from_bn(self, weights, silent=False):
     raise NotImplementedError
+
+  def set_weights_from_pn(self, weights):
+    """Set the weights of this layer from the PatchNormConv2D layer.
+
+    Set: 
+    self.alpha = pn.beta / pn.gamma
+    self.conv.kernel = pn.kernel / pn.gamma
+
+    :param weights: 
+    :returns: 
+    :rtype: 
+
+    """
+    raise NotImplementedError("TODO: this")
