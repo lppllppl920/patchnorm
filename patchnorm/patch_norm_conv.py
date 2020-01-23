@@ -238,18 +238,6 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
       dtype=self.dtype,
       trainable=True,
       initializer=tf.constant_initializer(0))  # sort of like a bias, gets multiplied along the in_channels dimension of the conv kernel
-    # self.beta = self.add_weight(
-    #   'beta',
-    #   shape=(input_shape[3],),
-    #   dtype=self.dtype,
-    #   trainable=True,
-    #   initializer=tf.constant_initializer(0))
-    # self.gamma = self.add_weight(
-    #   'gamma',
-    #   shape=(input_shape[3],),
-    #   dtype=self.dtype,
-    #   trainable=True,
-    #   initializer=tf.constant_initializer(1))
 
     self.conv = keras.layers.Conv2D(
       filters=self.filters,
