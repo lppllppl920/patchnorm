@@ -364,9 +364,16 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     :rtype: 
 
     """
-    weights = [self.alpha, np.ones_like(self.alpha), self.conv.kernel]
+    weights = self.get_weights()
+    beta = weights[0]
+    gamma = np.ones_like(beta)
+    kernel = weights[1]
+    
+    out = [beta, gamma, kernel]
 
     if self.use_bias:
-      weights.append(self.bias.bias)
+      out.append(weights[3])
 
+    logger.debug([w.shape for w in out])
+      
     return weights
