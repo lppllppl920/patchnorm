@@ -369,11 +369,9 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     gamma = np.ones_like(beta)
     kernel = weights[1]
 
-    print([w.shape for w in weights])
-    
     out = [beta, gamma, kernel]
 
     if self.use_bias:
-      out.append(weights[3])
+      out.append(weights[2])
 
     return out
