@@ -476,8 +476,8 @@ class EfficientPatchNormConv2D(EquivalentPatchNormConv2D):
     """
     own_weights = self.get_weights()
     weights.append(own_weights[-1])  # window weights
-    own_weights[0] = weights[0] / weights[1]
-    own_weights[1] = weights[2] / weights[1]
+    own_weights[0] = weights[0] / weights[1]  # beta / gamma
+    own_weights[1] = weights[2] / weights[1].reshape(1, 1, -1, 1)  # kernel / gamma
     self.set_weights(own_weights)
 
   def get_weights_for_pn(self):
