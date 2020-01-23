@@ -230,7 +230,7 @@ class BiasAdd(keras.layers.Layer):
                    'constraint': self.constraint})
     return config
     
-class EfficientPatchNormConv2D(PatchNormConv2D):
+class EquivalentPatchNormConv2D(PatchNormConv2D):
   def build(self, input_shape):
     self.beta = self.add_weight('beta',
                                 shape=(input_shape[3],),
@@ -381,7 +381,7 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     return out
 
   
-class ReducedPatchNormConv2D(EfficientPatchNormConv2D):
+class EfficientPatchNormConv2D(EquivalentPatchNormConv2D):
   def build(self, input_shape):
     self.alpha = self.add_weight(
       'alpha',
