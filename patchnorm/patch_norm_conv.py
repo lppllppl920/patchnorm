@@ -352,7 +352,7 @@ class EquivalentPatchNormConv2D(PatchNormConv2D):
 
     """
     own_weights = self.get_weights()
-    weights.append(own_weights[3])
+    weights.append(own_weights[-1])
     self.set_weights(weights)
 
   def get_weights_for_pn(self):
@@ -466,14 +466,19 @@ class EfficientPatchNormConv2D(EquivalentPatchNormConv2D):
     self.alpha = pn.beta / pn.gamma
     self.conv.kernel = pn.kernel / pn.gamma
 
+    weights = [beta, gamma, kernel, (bias)]
+    own_weights = [alpha, kernel, (bias), window]
+
     :param weights: 
     :returns: 
     :rtype: 
 
     """
-    # self.alpha.assign()
-    
-    raise NotImplementedError("TODO: this")
+    own_weights = self.get_weights()
+    weights.append(own_weights[-1])  # window weights
+    own_weights[0] = weights[0] / weights[1]
+    own_weights[1] = weights[2] / weights[1]
+    self.set_weights(own_weights)
 
   def get_weights_for_pn(self):
     """Get the weights of this layer for the PatchNormConv2D layer.
