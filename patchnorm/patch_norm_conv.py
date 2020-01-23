@@ -288,7 +288,7 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
   def call(self, x):
     """Implement the patch norm operation using Xingtong's more efficient method.
 
-    TODO: test physically relevant statistics on images
+    TODO: test against PatchNormConv2D with deterministic conditions
 
     """
     # (N, H', W', 1)
@@ -298,23 +298,6 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     
     # (N, H', W', filters)
     conv = self.conv(x) / stds
-
-    # # (N, H', W', 1)
-    # kernel_factor = tf.reshape(self.beta, (1, 1, 1, -1)) - means * tf.reshape(self.gamma, (1, 1, 1, -1)) / stds
-
-    # # get shapes
-    # _, H_, W_, _ = kernel_factor.shape
-    # h, w, C, filters = self.conv.kernel.shape
-
-    # # (1, 1, 1, C, filters)
-    # kernel_sum = tf.reshape(tf.reduce_sum(self.conv.kernel, axis=(0, 1)), (1, 1, 1, C, filters))
-
-    # # (N, H', W', 1, 1) x (1, 1, 1, C, filters) = (N, H', W', C, filters)
-    # weighted_kernel_image = tf.expand_dims(kernel_factor, -1) * kernel_sum
-
-    # # (N, H', W', filters)
-    # kernel_sum = tf.reduce_sum(weighted_kernel_image, axis=3)
-    # x = conv + kernel_sum
     
     # (1, 1, 1, filters)
     kernel_sum = tf.reduce_sum(self.conv.kernel, axis=(0, 1, 2), keepdims=True)
