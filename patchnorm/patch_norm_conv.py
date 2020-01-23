@@ -374,6 +374,4 @@ class EfficientPatchNormConv2D(PatchNormConv2D):
     if self.use_bias:
       out.append(weights[3])
 
-    logger.info([w.shape for w in out])
-      
-    return weights
+    return out
