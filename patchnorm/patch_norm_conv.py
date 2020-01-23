@@ -286,7 +286,8 @@ class EquivalentPatchNormConv2D(PatchNormConv2D):
     # (N, H', W', 1)
     means = self.box(x)
     square_means = self.box(tf.math.square(x))
-    stds = tf.math.sqrt(self.variance_correction * (square_means - tf.math.square(means)) + self.epsilon)
+    stds = tf.math.sqrt((square_means - tf.math.square(means)) + self.epsilon)
+    # stds = tf.math.sqrt(self.variance_correction * (square_means - tf.math.square(means)) + self.epsilon)
     
     # (N, H', W', filters)
     conv = self.conv(tf.reshape(self.gamma, (1, 1, 1, -1)) * x) / stds
@@ -433,7 +434,8 @@ class EfficientPatchNormConv2D(EquivalentPatchNormConv2D):
     # (N, H', W', 1)
     means = self.box(x)
     square_means = self.box(tf.math.square(x))
-    stds = tf.math.sqrt(self.variance_correction * (square_means - tf.math.square(means)) + self.epsilon)
+    stds = tf.math.sqrt((square_means - tf.math.square(means)) + self.epsilon)
+    # stds = tf.math.sqrt(self.variance_correction * (square_means - tf.math.square(means)) + self.epsilon)
     
     # (N, H', W', filters)
     conv = self.conv(x) / stds
