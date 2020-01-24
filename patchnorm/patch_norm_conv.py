@@ -233,12 +233,12 @@ class BiasAdd(keras.layers.Layer):
 class EquivalentPatchNormConv2D(PatchNormConv2D):
   def build(self, input_shape):
     self.beta = self.add_weight('beta',
-                                shape=(input_shape[3],),
+                                # shape=(input_shape[3],),
                                 dtype=self.dtype,
                                 trainable=True,
                                 initializer=tf.constant_initializer(0))
     self.gamma = self.add_weight('gamma',
-                                 shape=(input_shape[3],),
+                                 # shape=(input_shape[3],),
                                  dtype=self.dtype,
                                  trainable=True,
                                  initializer=tf.constant_initializer(1))
