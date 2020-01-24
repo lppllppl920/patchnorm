@@ -386,7 +386,7 @@ class EfficientPatchNormConv2D(EquivalentPatchNormConv2D):
   def build(self, input_shape):
     self.alpha = self.add_weight(
       'alpha',
-      shape=(input_shape[3],),
+      # shape=(input_shape[3],),
       dtype=self.dtype,
       trainable=True,
       initializer=tf.constant_initializer(0))  # sort of like a bias, gets multiplied along the in_channels dimension of the conv kernel
