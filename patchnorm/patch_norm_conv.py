@@ -33,7 +33,7 @@ class PatchNormConv2D(keras.layers.Layer):
                axis=3,
                patch_size=None,
                epsilon=0.00001,
-               simple=True,
+               simple=False,
                **kwargs):
     """Patch norm + convolution.
 
