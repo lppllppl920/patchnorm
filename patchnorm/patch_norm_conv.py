@@ -33,6 +33,7 @@ class PatchNormConv2D(keras.layers.Layer):
                axis=3,
                patch_size=None,
                epsilon=0.00001,
+               simple=True,
                **kwargs):
     """Patch norm + convolution.
 
@@ -50,6 +51,9 @@ class PatchNormConv2D(keras.layers.Layer):
     :param kernel_constraint: 
     :param bias_constraint: 
     :param axis: 
+    :param patch_size: 
+    :param epsilon: 
+    :param simple: whether to use 1D beta and gamma
     :returns: 
     :rtype: 
 
@@ -72,18 +76,19 @@ class PatchNormConv2D(keras.layers.Layer):
     self.axis = axis
     self.patch_size = self.kernel_size if patch_size is None else utils.tuplify(patch_size, 2)
     self.epsilon = epsilon
+    self.simple = simple
 
     assert self.padding == 'same' or self.kernel_size == (1, 1), 'todo: padding != same, especially for patch_size != kernel_size'
     assert self.axis == 3, 'todo: axis != 3'
 
   def build(self, input_shape):
     self.beta = self.add_weight('beta',
-                                shape=(input_shape[3],),
+                                shape=(,) if self.simple else (input_shape[3],),
                                 dtype=self.dtype,
                                 trainable=True,
                                 initializer=tf.constant_initializer(0))
     self.gamma = self.add_weight('gamma',
-                                 shape=(input_shape[3],),
+                                 shape=(,) if self.simple else (input_shape[3],),
                                  dtype=self.dtype,
                                  trainable=True,
                                  initializer=tf.constant_initializer(1))
@@ -233,12 +238,12 @@ class BiasAdd(keras.layers.Layer):
 class EquivalentPatchNormConv2D(PatchNormConv2D):
   def build(self, input_shape):
     self.beta = self.add_weight('beta',
-                                shape=(input_shape[3],),
+                                shape=(,) if self.simple else (input_shape[3],),
                                 dtype=self.dtype,
                                 trainable=True,
                                 initializer=tf.constant_initializer(0))
     self.gamma = self.add_weight('gamma',
-                                 shape=(input_shape[3],),
+                                 shape=(,) if self.simple else (input_shape[3],),
                                  dtype=self.dtype,
                                  trainable=True,
                                  initializer=tf.constant_initializer(1))
@@ -289,12 +294,12 @@ class EquivalentPatchNormConv2D(PatchNormConv2D):
     stds = tf.math.sqrt((square_means - tf.math.square(means)) + self.epsilon)
     # stds = tf.math.sqrt(self.variance_correction * (square_means - tf.math.square(means)) + self.epsilon)
 
-    if training:
-      beta = self.beta
-      gamma = self.gamma
-    else:
-      beta = tf.reduce_mean(self.beta)
-      gamma = tf.reduce_mean(self.gamma)
+    # if training:
+    #   beta = self.beta
+    #   gamma = self.gamma
+    # else:
+    #   beta = tf.reduce_mean(self.beta)
+    #   gamma = tf.reduce_mean(self.gamma)
       
     # (N, H', W', filters)
     conv = self.conv(tf.reshape(gamma, (1, 1, 1, -1)) * x) / stds
@@ -392,7 +397,7 @@ class EfficientPatchNormConv2D(EquivalentPatchNormConv2D):
   def build(self, input_shape):
     self.alpha = self.add_weight(
       'alpha',
-      shape=(input_shape[3],),
+      shape=(,) if self.simple else (input_shape[3],),
       dtype=self.dtype,
       trainable=True,
       initializer=tf.constant_initializer(0))  # sort of like a bias, gets multiplied along the in_channels dimension of the conv kernel
