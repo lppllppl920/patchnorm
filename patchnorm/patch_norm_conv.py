@@ -290,11 +290,11 @@ class EquivalentPatchNormConv2D(PatchNormConv2D):
     # stds = tf.math.sqrt(self.variance_correction * (square_means - tf.math.square(means)) + self.epsilon)
 
     if training:
-      beta = tf.reduce_mean(self.beta)
-      gamma = tf.reduce_mean(self.gamma)
-    else:
       beta = self.beta
       gamma = self.gamma
+    else:
+      beta = tf.reduce_mean(self.beta)
+      gamma = tf.reduce_mean(self.gamma)
       
     # (N, H', W', filters)
     conv = self.conv(tf.reshape(gamma, (1, 1, 1, -1)) * x) / stds
