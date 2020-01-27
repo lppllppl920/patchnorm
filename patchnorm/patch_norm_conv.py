@@ -238,12 +238,12 @@ class BiasAdd(keras.layers.Layer):
 class EquivalentPatchNormConv2D(PatchNormConv2D):
   def build(self, input_shape):
     self.beta = self.add_weight('beta',
-                                shape=(,) if self.simple else (input_shape[3],),
+                                shape=(1,) if self.simple else (input_shape[3],),
                                 dtype=self.dtype,
                                 trainable=True,
                                 initializer=tf.constant_initializer(0))
     self.gamma = self.add_weight('gamma',
-                                 shape=(,) if self.simple else (input_shape[3],),
+                                 shape=(1,) if self.simple else (input_shape[3],),
                                  dtype=self.dtype,
                                  trainable=True,
                                  initializer=tf.constant_initializer(1))
@@ -397,7 +397,7 @@ class EfficientPatchNormConv2D(EquivalentPatchNormConv2D):
   def build(self, input_shape):
     self.alpha = self.add_weight(
       'alpha',
-      shape=(,) if self.simple else (input_shape[3],),
+      shape=(1,) if self.simple else (input_shape[3],),
       dtype=self.dtype,
       trainable=True,
       initializer=tf.constant_initializer(0))  # sort of like a bias, gets multiplied along the in_channels dimension of the conv kernel
