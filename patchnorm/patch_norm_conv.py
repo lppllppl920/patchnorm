@@ -277,7 +277,7 @@ class EquivalentPatchNormConv2D(PatchNormConv2D):
     if self.activation is not None:
       self.act = keras.layers.Activation(self.activation)
 
-  def call(self, x):
+  def call(self, x, training=False):
     """Implement the patch norm operation using Xingtong's more efficient method.
 
     TODO: test against PatchNormConv2D with deterministic conditions
@@ -288,19 +288,25 @@ class EquivalentPatchNormConv2D(PatchNormConv2D):
     square_means = self.box(tf.math.square(x))
     stds = tf.math.sqrt((square_means - tf.math.square(means)) + self.epsilon)
     # stds = tf.math.sqrt(self.variance_correction * (square_means - tf.math.square(means)) + self.epsilon)
-    
+
+    if training:
+      beta = tf.reduce_avg(self.beta)
+      gamma = tf.reduce_avg(self.gamma)
+    else:
+      beta = self.beta
+      gamma = self.gamma
+      
     # (N, H', W', filters)
-    conv = self.conv(tf.reshape(self.gamma, (1, 1, 1, -1)) * x) / stds
+    conv = self.conv(tf.reshape(gamma, (1, 1, 1, -1)) * x) / stds
    
     # (1, 1, 1, filters)
-    gamma_kernel_sum = tf.reduce_sum(tf.reshape(self.gamma, (1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2), keepdims=True)
+    gamma_kernel_sum = tf.reduce_sum(tf.reshape(gamma, (1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2), keepdims=True)
     
-
     # (N, H', W', filters)
     kernel_weighted_means = means * gamma_kernel_sum / stds
 
     # (1, 1, 1, filters)
-    beta_kernel_sum = tf.reduce_sum(tf.reshape(self.beta, (1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2), keepdims=True)
+    beta_kernel_sum = tf.reduce_sum(tf.reshape(beta, (1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2), keepdims=True)
 
     # (N, H', W', filters)
     x = conv - kernel_weighted_means + beta_kernel_sum
