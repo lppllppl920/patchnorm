@@ -303,16 +303,16 @@ class EquivalentPatchNormConv2D(PatchNormConv2D):
       gamma = tf.reduce_mean(self.gamma)
       
     # (N, H', W', filters)
-    conv = self.conv(tf.reshape(self.gamma, (1, 1, 1, -1)) * x) / stds
+    conv = self.conv(tf.reshape(gamma, (1, 1, 1, -1)) * x) / stds
    
     # (1, 1, 1, filters)
-    gamma_kernel_sum = tf.reduce_sum(tf.reshape(self.gamma, (1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2), keepdims=True)
+    gamma_kernel_sum = tf.reduce_sum(tf.reshape(gamma, (1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2), keepdims=True)
     
     # (N, H', W', filters)
     kernel_weighted_means = means * gamma_kernel_sum / stds
 
     # (1, 1, 1, filters)
-    beta_kernel_sum = tf.reduce_sum(tf.reshape(self.beta, (1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2), keepdims=True)
+    beta_kernel_sum = tf.reduce_sum(tf.reshape(beta, (1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2), keepdims=True)
 
     # (N, H', W', filters)
     x = conv - kernel_weighted_means + beta_kernel_sum
