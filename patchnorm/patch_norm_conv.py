@@ -83,12 +83,12 @@ class PatchNormConv2D(keras.layers.Layer):
 
   def build(self, input_shape):
     self.beta = self.add_weight('beta',
-                                shape=(,) if self.simple else (input_shape[3],),
+                                shape=(1,) if self.simple else (input_shape[3],),
                                 dtype=self.dtype,
                                 trainable=True,
                                 initializer=tf.constant_initializer(0))
     self.gamma = self.add_weight('gamma',
-                                 shape=(,) if self.simple else (input_shape[3],),
+                                 shape=(1,) if self.simple else (input_shape[3],),
                                  dtype=self.dtype,
                                  trainable=True,
                                  initializer=tf.constant_initializer(1))
