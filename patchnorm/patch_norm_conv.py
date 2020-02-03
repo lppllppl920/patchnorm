@@ -268,10 +268,10 @@ class EquivalentPatchNormConv2D(PatchNormConv2D):
       padding=self.padding,
       activation=None,
       use_bias=False,
-      kernel_initializer=keras.initializers.Constant(1 / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])),
+      kernel_initializer=keras.initializers.Constant(1 / (input_shape[3] * self.patch_size[0] * self.patch_size[1])),
       trainable=False)
 
-    window_size = input_shape[3] * self.kernel_size[0] * self.kernel_size[1]
+    window_size = input_shape[3] * self.patch_size[0] * self.patch_size[1]
     self.variance_correction = window_size / (window_size - 1)
 
     if self.use_bias:
@@ -415,10 +415,10 @@ class EfficientPatchNormConv2D(EquivalentPatchNormConv2D):
       padding=self.padding,
       activation=None,
       use_bias=False,
-      kernel_initializer=keras.initializers.Constant(1 / (input_shape[3] * self.kernel_size[0] * self.kernel_size[1])),
+      kernel_initializer=keras.initializers.Constant(1 / (input_shape[3] * self.patch_size[0] * self.patch_size[1])),
       trainable=False)
 
-    window_size = input_shape[3] * self.kernel_size[0] * self.kernel_size[1]
+    window_size = input_shape[3] * self.patch_size[0] * self.patch_size[1]
     self.variance_correction = window_size / (window_size - 1)
 
     if self.use_bias:
