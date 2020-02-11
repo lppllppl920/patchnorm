@@ -1,8 +1,8 @@
-# PatchNorm
-
-This contains the EfficientPatchNormConv2D and PatchNormConv2D layers.
+# Patch-normalized Convolution
 
 ![patch_norm](patch_norm.jpg "patch_norm")
+
+Implementation of patch-normalized convolutional layers in PyTorch and Tensorflow Keras.
 
 ## Installation
 
