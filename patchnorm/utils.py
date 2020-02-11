@@ -4,7 +4,7 @@ def tuplify(val, length):
   else:
     return tuple(val for _ in range(length))
 
-
+  
 def listify(val, length):
   if type(val) in [tuple, list] and len(val) == length:
     return list(val)

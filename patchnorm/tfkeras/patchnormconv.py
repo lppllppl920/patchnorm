@@ -1,21 +1,16 @@
-import numpy as np
-import tensorflow as tf
-from tensorflow import keras
-
-from . import utils
+try:
+  import tensorflow as tf
+  from tensorflow import keras
+except ImportError:
+  raise ImportError(f'Please install Tensorflow, for example using `pip install tensorflow`, or following the instructions at `https://www.tensorflow.org`.')
+  
+from .. import utils
 
 
 logger = tf.get_logger()
 
 
-class PatchNormConv2D(keras.layers.Layer):
-  """Notes:
-
-  Whereas batch norm computes the mean and variance over the entire dataset, we
-  compute these values over the inputs for each image patch, for a single image input.
-
-  """
-
+class NaivePatchNormConv2D(keras.layers.Layer):
   def __init__(self,
                filters,
                kernel_size,
@@ -30,17 +25,18 @@ class PatchNormConv2D(keras.layers.Layer):
                activity_regularizer=None,
                kernel_constraint=None,
                bias_constraint=None,
-               axis=3,
                patch_size=None,
                epsilon=0.00001,
-               simple=True,
+               channel_wise=False,
                **kwargs):
-    """Patch norm + convolution.
+    """Patch-normalized convolution using extract_patches.
 
-    :param filters: 
-    :param kernel_size: 
-    :param strides: 
-    :param padding: 
+    This is a memory inefficient implementation of the patch-normalized convolution and is included for edification. From the Tensorflow docs:
+
+    :param filters: Integer, the dimensionality of the output space (i.e. the number of output filters in the convolution)
+    :param kernel_size: An integer or tuple/list of 2 integers, specifying the height and width of the 2D convolution window. Can be a single integer to specify the same value for all spatial dimensions.
+    :param strides: An integer or tuple/list of 2 integers, specifying the strides of the convolution along the height and width. Can be a single integer to specify the same value for all spatial dimensions. Specifying any stride value != 1 is incompatible with specifying any `dilation_rate` value != 1.
+    :param padding: one of `"valid"` or `"same"` (case-insensitive).
     :param activation: 
     :param use_bias: 
     :param kernel_initializer: 
@@ -50,13 +46,10 @@ class PatchNormConv2D(keras.layers.Layer):
     :param activity_regularizer: 
     :param kernel_constraint: 
     :param bias_constraint: 
-    :param axis: 
     :param patch_size: 
-    :param epsilon: 
-    :param simple: whether to use 1D beta and gamma
-    :returns: 
-    :rtype: 
-
+    :param epsilon: value of epsilon to use.
+    :param channel_wise: use per-channel beta and gamma parameters.
+l
     """
     super().__init__(**kwargs)
 
@@ -73,22 +66,22 @@ class PatchNormConv2D(keras.layers.Layer):
     self.activity_regularizer = activity_regularizer
     self.kernel_constraint = kernel_constraint
     self.bias_constraint = bias_constraint
-    self.axis = axis
+    self.axis = 3
     self.patch_size = self.kernel_size if patch_size is None else utils.tuplify(patch_size, 2)
     self.epsilon = epsilon
-    self.simple = simple
+    self.channel_wise = channel_wise
 
     assert self.padding == 'same' or self.kernel_size == (1, 1), 'todo: padding != same, especially for patch_size != kernel_size'
     assert self.axis == 3, 'todo: axis != 3'
 
   def build(self, input_shape):
     self.beta = self.add_weight('beta',
-                                shape=(1,) if self.simple else (input_shape[3],),
+                                shape=(input_shape[3],) if self.channel_wise else (input_shape[3],),
                                 dtype=self.dtype,
                                 trainable=True,
                                 initializer=tf.constant_initializer(0))
     self.gamma = self.add_weight('gamma',
-                                 shape=(1,) if self.simple else (input_shape[3],),
+                                 shape=(input_shape[3],) if self.channel_wise else (input_shape[3],),
                                  dtype=self.dtype,
                                  trainable=True,
                                  initializer=tf.constant_initializer(1))
@@ -235,16 +228,17 @@ class BiasAdd(keras.layers.Layer):
                    'regularizer': self.regularizer,
                    'constraint': self.constraint})
     return config
-    
-class EquivalentPatchNormConv2D(PatchNormConv2D):
+
+  
+class PatchNormConv2D(NaivePatchNormConv2D):
   def build(self, input_shape):
     self.beta = self.add_weight('beta',
-                                shape=(1,) if self.simple else (input_shape[3],),
+                                shape=(input_shape[3],) if self.channel_wise else (input_shape[3],),
                                 dtype=self.dtype,
                                 trainable=True,
                                 initializer=tf.constant_initializer(0))
     self.gamma = self.add_weight('gamma',
-                                 shape=(1,) if self.simple else (input_shape[3],),
+                                 shape=(input_shape[3],) if self.channel_wise else (input_shape[3],),
                                  dtype=self.dtype,
                                  trainable=True,
                                  initializer=tf.constant_initializer(1))
@@ -386,128 +380,4 @@ class EquivalentPatchNormConv2D(PatchNormConv2D):
 
     return out
 
-  
-class EfficientPatchNormConv2D(EquivalentPatchNormConv2D):
-  def build(self, input_shape):
-    self.alpha = self.add_weight(
-      'alpha',
-      shape=(1,) if self.simple else (input_shape[3],),
-      dtype=self.dtype,
-      trainable=True,
-      initializer=tf.constant_initializer(0))  # sort of like a bias, gets multiplied along the in_channels dimension of the conv kernel
 
-    self.conv = keras.layers.Conv2D(
-      filters=self.filters,
-      kernel_size=self.kernel_size,
-      strides=self.strides,
-      padding=self.padding,
-      activation=None,
-      use_bias=False,
-      kernel_initializer=self.kernel_initializer,
-      kernel_regularizer=self.kernel_regularizer,
-      activity_regularizer=self.activity_regularizer,
-      kernel_constraint=self.kernel_constraint)
-
-    self.box = keras.layers.Conv2D(
-      filters=1,
-      kernel_size=self.patch_size,
-      strides=self.strides,
-      padding=self.padding,
-      activation=None,
-      use_bias=False,
-      kernel_initializer=keras.initializers.Constant(1 / (input_shape[3] * self.patch_size[0] * self.patch_size[1])),
-      trainable=False)
-
-    window_size = input_shape[3] * self.patch_size[0] * self.patch_size[1]
-    self.variance_correction = window_size / (window_size - 1)
-
-    if self.use_bias:
-      self.bias = BiasAdd(
-        initializer=self.bias_initializer,
-        regularizer=self.bias_regularizer,
-        constraint=self.bias_constraint)
-
-    if self.activation is not None:
-      self.act = keras.layers.Activation(self.activation)
-
-  def call(self, x):
-    """Implement the patch norm operation using Xingtong's more efficient method.
-
-    TODO: test against PatchNormConv2D with deterministic conditions
-
-    """
-    # (N, H', W', 1)
-    means = self.box(x)
-    square_means = self.box(tf.math.square(x))
-    stds = tf.math.sqrt((square_means - tf.math.square(means)) + self.epsilon)
-    # stds = tf.math.sqrt(self.variance_correction * (square_means - tf.math.square(means)) + self.epsilon)
-    
-    # (N, H', W', filters)
-    conv = self.conv(x) / stds
-    
-    # (1, 1, 1, filters)
-    kernel_sum = tf.reduce_sum(self.conv.kernel, axis=(0, 1, 2), keepdims=True)
-
-    # (N, H', W', filters)
-    kernel_weighted_means = means * kernel_sum / stds
-
-    # (1, 1, 1, filters)
-    weighted_kernel = self.conv.kernel * tf.reshape(self.alpha, (1, 1, -1, 1))
-    weighted_kernel_sum = tf.reduce_sum(weighted_kernel, axis=(0, 1, 2), keepdims=True)
-
-    # (N, H', W', filters)
-    x = conv - kernel_weighted_means + weighted_kernel_sum
-
-    if self.use_bias:
-      x = self.bias(x)
-
-    if self.activation is not None:
-      x = self.act(x)
-
-    return x
-
-  def set_weights_from_pn(self, weights):
-    """Set the weights of this layer from the PatchNormConv2D layer.
-
-    Set: 
-    self.alpha = pn.beta / pn.gamma
-    self.conv.kernel = pn.kernel / pn.gamma
-
-    weights = [beta, gamma, kernel, (bias)]
-    own_weights = [alpha, kernel, (bias), window]
-
-    :param weights: 
-    :returns: 
-    :rtype: 
-
-    """
-    own_weights = self.get_weights()
-    weights.append(own_weights[-1])  # window weights
-    own_weights[0] = weights[0] / weights[1]  # beta / gamma
-    own_weights[1] = weights[2] / weights[1].reshape(1, 1, -1, 1)  # kernel / gamma
-    self.set_weights(own_weights)
-
-  def get_weights_for_pn(self):
-    """Get the weights of this layer for the PatchNormConv2D layer.
-
-    Get:
-    pn.beta = self.alpha
-    pn.gamma = 1.0
-    pn.kernel = self.conv.kernel
-
-    :param weights: 
-    :returns: 
-    :rtype: 
-
-    """
-    weights = self.get_weights()
-    beta = weights[0]
-    gamma = np.ones_like(beta)
-    kernel = weights[1]
-
-    out = [beta, gamma, kernel]
-
-    if self.use_bias:
-      out.append(weights[2])
-
-    return out
