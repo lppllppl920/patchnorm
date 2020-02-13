@@ -71,13 +71,12 @@ class NaivePatchNormConv2D(keras.layers.Layer):
     self.axis = 3
     self.patch_size = self.kernel_size if patch_size is None else utils.tuplify(patch_size, 2)
     self.epsilon = epsilon
-    self.channel_wise = channel_wise if simple is None else simple
+    self.channel_wise = channel_wise if simple is None else not simple
     self.simple = simple
     self.axis = axis
 
     assert axis is None or axis == 3, 'axis == 3 or None'
     assert self.padding == 'same' or self.kernel_size == (1, 1), 'todo: padding != same, especially for patch_size != kernel_size'
-    assert self.axis == 3, 'todo: axis != 3'
 
   def build(self, input_shape):
     self.beta = self.add_weight('beta',
