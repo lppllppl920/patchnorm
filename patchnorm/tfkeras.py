@@ -4,7 +4,7 @@ try:
 except ImportError:
   raise ImportError(f'Please install Tensorflow, for example using `pip install tensorflow`, or following the instructions at `https://www.tensorflow.org`.')
   
-from .. import utils
+from . import utils
 
 
 logger = tf.get_logger()
@@ -29,6 +29,7 @@ class NaivePatchNormConv2D(keras.layers.Layer):
                epsilon=0.00001,
                channel_wise=False,
                simple=None,     # included for backward compatibility
+               axis=None,       # included for backward compatibility
                **kwargs):
     """Patch-normalized convolution using extract_patches.
 
@@ -72,18 +73,20 @@ class NaivePatchNormConv2D(keras.layers.Layer):
     self.epsilon = epsilon
     self.channel_wise = channel_wise if simple is None else simple
     self.simple = simple
+    self.axis = axis
 
+    assert axis is None or axis == 3, 'axis == 3 or None'
     assert self.padding == 'same' or self.kernel_size == (1, 1), 'todo: padding != same, especially for patch_size != kernel_size'
     assert self.axis == 3, 'todo: axis != 3'
 
   def build(self, input_shape):
     self.beta = self.add_weight('beta',
-                                shape=(input_shape[3],) if self.channel_wise else (input_shape[3],),
+                                shape=(input_shape[3],) if self.channel_wise else (1,),
                                 dtype=self.dtype,
                                 trainable=True,
                                 initializer=tf.constant_initializer(0))
     self.gamma = self.add_weight('gamma',
-                                 shape=(input_shape[3],) if self.channel_wise else (input_shape[3],),
+                                 shape=(input_shape[3],) if self.channel_wise else (1,),
                                  dtype=self.dtype,
                                  trainable=True,
                                  initializer=tf.constant_initializer(1))
@@ -236,12 +239,12 @@ class BiasAdd(keras.layers.Layer):
 class PatchNormConv2D(NaivePatchNormConv2D):
   def build(self, input_shape):
     self.beta = self.add_weight('beta',
-                                shape=(input_shape[3],) if self.channel_wise else (input_shape[3],),
+                                shape=(input_shape[3],) if self.channel_wise else (1,),
                                 dtype=self.dtype,
                                 trainable=True,
                                 initializer=tf.constant_initializer(0))
     self.gamma = self.add_weight('gamma',
-                                 shape=(input_shape[3],) if self.channel_wise else (input_shape[3],),
+                                 shape=(input_shape[3],) if self.channel_wise else (1,),
                                  dtype=self.dtype,
                                  trainable=True,
                                  initializer=tf.constant_initializer(1))
