@@ -28,6 +28,7 @@ class NaivePatchNormConv2D(keras.layers.Layer):
                patch_size=None,
                epsilon=0.00001,
                channel_wise=False,
+               simple=None,     # included for backward compatibility
                **kwargs):
     """Patch-normalized convolution using extract_patches.
 
@@ -69,7 +70,8 @@ l
     self.axis = 3
     self.patch_size = self.kernel_size if patch_size is None else utils.tuplify(patch_size, 2)
     self.epsilon = epsilon
-    self.channel_wise = channel_wise
+    self.channel_wise = channel_wise if simple is None else simple
+    self.simple = simple
 
     assert self.padding == 'same' or self.kernel_size == (1, 1), 'todo: padding != same, especially for patch_size != kernel_size'
     assert self.axis == 3, 'todo: axis != 3'
@@ -145,6 +147,7 @@ l
                    'bias_constraint': self.bias_constraint,
                    'axis': self.axis,
                    'patch_size': self.patch_size,
+                   'channel_wise': self.channel_wise,
                    'simple': self.simple})
     return config
 
