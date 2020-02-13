@@ -50,7 +50,7 @@ class NaivePatchNormConv2D(keras.layers.Layer):
     :param patch_size: 
     :param epsilon: value of epsilon to use.
     :param channel_wise: use per-channel beta and gamma parameters.
-l
+
     """
     super().__init__(**kwargs)
 
