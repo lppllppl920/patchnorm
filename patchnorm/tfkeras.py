@@ -26,7 +26,7 @@ class NaivePatchNormConv2D(keras.layers.Layer):
                kernel_constraint=None,
                bias_constraint=None,
                patch_size=None,
-               epsilon=0.00001,
+               epsilon=0.001,
                channel_wise=False,
                simple=None,     # included for backward compatibility
                axis=None,       # included for backward compatibility
@@ -77,6 +77,8 @@ class NaivePatchNormConv2D(keras.layers.Layer):
 
     assert axis is None or axis == 3, 'axis == 3 or None'
     assert self.padding == 'same' or self.kernel_size == (1, 1), 'todo: padding != same, especially for patch_size != kernel_size'
+    if self.kernel_size == (1, 1):
+      self.padding = 'same'
 
   def build(self, input_shape):
     self.beta = self.add_weight('beta',
@@ -260,6 +262,10 @@ class PatchNormConv2D(NaivePatchNormConv2D):
       activity_regularizer=self.activity_regularizer,
       kernel_constraint=self.kernel_constraint)
 
+    # self.box_filter = tf.constant(1 / (input_shape[3] * self.patch_size[0] * self.patch_size[1]),
+    #                               shape=(self.patch_size[0], self.patch_size[1], input_shape[3], 1),
+    #                               dtype=self.dtype)
+    
     self.box = keras.layers.Conv2D(
       filters=1,
       kernel_size=self.patch_size,
@@ -285,16 +291,17 @@ class PatchNormConv2D(NaivePatchNormConv2D):
   def call(self, x, training=False):
     """Implement the patch norm operation using Xingtong's more efficient method.
 
-    TODO: test against PatchNormConv2D with deterministic conditions
-
     """
     # (N, H', W', 1)
     means = self.box(x)
     square_means = self.box(tf.math.square(x))
+    # means = tf.nn.conv2d(x, self.box_filter, strides=self.strides, padding=self.padding.upper())
+    # square_means = tf.nn.conv2d(tf.math.square(x), self.box_filter, strides=self.strides, padding=self.padding.upper())
     stds = tf.math.sqrt((square_means - tf.math.square(means)) + self.epsilon)
     # stds = tf.math.sqrt(self.variance_correction * (square_means - tf.math.square(means)) + self.epsilon)
 
     # (N, H', W', filters)
+    # tf.print(tf.reduce_min(stds))
     conv = self.conv(tf.reshape(self.gamma, (1, 1, 1, -1)) * x) / stds
    
     # (1, 1, 1, filters)
