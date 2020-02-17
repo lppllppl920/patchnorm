@@ -301,7 +301,6 @@ class PatchNormConv2D(NaivePatchNormConv2D):
     # stds = tf.math.sqrt(self.variance_correction * (square_means - tf.math.square(means)) + self.epsilon)
 
     # (N, H', W', filters)
-    # tf.print(tf.reduce_min(stds))
     conv = self.conv(tf.reshape(self.gamma, (1, 1, 1, -1)) * x) / stds
    
     # (1, 1, 1, filters)
