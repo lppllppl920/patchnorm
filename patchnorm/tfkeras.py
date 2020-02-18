@@ -16,6 +16,7 @@ class NaivePatchNormConv2D(keras.layers.Layer):
                kernel_size,
                strides=1,
                padding='same',
+               dilation_rate=1,
                activation=None,
                use_bias=True,
                kernel_initializer='glorot_uniform',
@@ -60,6 +61,7 @@ class NaivePatchNormConv2D(keras.layers.Layer):
     self.strides = utils.tuplify(strides, 2)
     self.padding = padding
     self.activation = activation
+    self.dilation_rate = dilation_rate
     self.use_bias = use_bias
     self.kernel_initializer = kernel_initializer
     self.bias_initializer = bias_initializer
@@ -69,16 +71,21 @@ class NaivePatchNormConv2D(keras.layers.Layer):
     self.kernel_constraint = kernel_constraint
     self.bias_constraint = bias_constraint
     self.axis = 3
-    self.patch_size = self.kernel_size if patch_size is None else utils.tuplify(patch_size, 2)
     self.epsilon = epsilon
     self.channel_wise = channel_wise if simple is None else not simple
     self.simple = simple
     self.axis = axis
 
+    self.patch_size = self._get_receptive_field() if patch_size is None else utils.tuplify(patch_size, 2)
+
     assert axis is None or axis == 3, 'axis == 3 or None'
     assert self.padding == 'same' or self.kernel_size == (1, 1), 'todo: padding != same, especially for patch_size != kernel_size'
     if self.kernel_size == (1, 1):
       self.padding = 'same'
+
+    if self.dilation_rate != 1:
+      assert self.padding.lower() == 'same'
+      assert self.strides == (1, 1)
 
   def build(self, input_shape):
     self.beta = self.add_weight('beta',
@@ -97,6 +104,7 @@ class NaivePatchNormConv2D(keras.layers.Layer):
       kernel_size=self.kernel_size,
       strides=self.kernel_size,
       padding='valid',
+      dilation_rate=self.dilation_rate,
       activation=self.activation,
       use_bias=self.use_bias,
       kernel_initializer=self.kernel_initializer,
@@ -107,6 +115,10 @@ class NaivePatchNormConv2D(keras.layers.Layer):
       kernel_constraint=self.kernel_constraint,
       bias_constraint=self.bias_constraint)
 
+  def _get_receptive_field(self):
+    return (self.dilation_rate * (self.kernel_size[0] + 1) - 1,
+            self.dilation_rate * (self.kernel_size[1] + 1) - 1)
+    
   def call(self, x):
     # (N, H', W', h * w * C)
     patches = tf.image.extract_patches(
@@ -255,16 +267,13 @@ class PatchNormConv2D(NaivePatchNormConv2D):
       kernel_size=self.kernel_size,
       strides=self.strides,
       padding=self.padding,
+      dilation_rate=self.dilation_rate,
       activation=None,
       use_bias=False,
       kernel_initializer=self.kernel_initializer,
       kernel_regularizer=self.kernel_regularizer,
       activity_regularizer=self.activity_regularizer,
       kernel_constraint=self.kernel_constraint)
-
-    # self.box_filter = tf.constant(1 / (input_shape[3] * self.patch_size[0] * self.patch_size[1]),
-    #                               shape=(self.patch_size[0], self.patch_size[1], input_shape[3], 1),
-    #                               dtype=self.dtype)
     
     self.box = keras.layers.Conv2D(
       filters=1,
@@ -295,10 +304,7 @@ class PatchNormConv2D(NaivePatchNormConv2D):
     # (N, H', W', 1)
     means = self.box(x)
     square_means = self.box(tf.math.square(x))
-    # means = tf.nn.conv2d(x, self.box_filter, strides=self.strides, padding=self.padding.upper())
-    # square_means = tf.nn.conv2d(tf.math.square(x), self.box_filter, strides=self.strides, padding=self.padding.upper())
     stds = tf.math.sqrt((square_means - tf.math.square(means)) + self.epsilon)
-    # stds = tf.math.sqrt(self.variance_correction * (square_means - tf.math.square(means)) + self.epsilon)
 
     # (N, H', W', filters)
     conv = self.conv(tf.reshape(self.gamma, (1, 1, 1, -1)) * x) / stds
@@ -392,3 +398,70 @@ class PatchNormConv2D(NaivePatchNormConv2D):
     return out
 
 
+class DepthwisePatchNormConv2D(PatchNormConv2D):
+  def __init__(
+      self,
+      *args,
+      depth_multiplier=1,
+      depthwise_initializer='glorot_uniform',
+      depthwise_regularizer=None,
+      depthwise_constraint=None,
+      **kwargs):
+
+    self.depth_multiplier = depth_multiplier
+    self.depthwise_initializer = depthwise_initializer
+    self.depthwise_regularizer = depthwise_regularizer
+    self.depthwise_constraint = depthwise_constraint
+    
+    kwargs['kernel_initializer'] = depthwise_initializer
+    kwargs['kernel_regularizer'] = depthwise_regularizer
+    kwargs['kernel_constraint'] = depthwise_constraint
+
+    super().__init__(*args, **kwargs)
+  
+  def build(self, input_shape):
+    self.beta = self.add_weight('beta',
+                                shape=(input_shape[3],) if self.channel_wise else (1,),
+                                dtype=self.dtype,
+                                trainable=True,
+                                initializer=tf.constant_initializer(0))
+    self.gamma = self.add_weight('gamma',
+                                 shape=(input_shape[3],) if self.channel_wise else (1,),
+                                 dtype=self.dtype,
+                                 trainable=True,
+                                 initializer=tf.constant_initializer(1))
+
+    # todo: generalizer adding the conv layer over different types, etc
+    self.conv = keras.layers.DepthwiseConv2D(
+      kernel_size=self.kernel_size,
+      strides=self.strides,
+      padding=self.padding,
+      depth_multiplier=self.depth_multiplier,
+      activation=None,
+      use_bias=False,
+      depthwise_initializer=self.depthwise_initializer,
+      depthwise_regularizer=self.depthwise_regularizer,
+      activity_regularizer=self.activity_regularizer,
+      depthwise_constraint=self.depthwise_constraint)
+    
+    self.box = keras.layers.Conv2D(
+      filters=1,
+      kernel_size=self.patch_size,
+      strides=self.strides,
+      padding=self.padding,
+      activation=None,
+      use_bias=False,
+      kernel_initializer=keras.initializers.Constant(1 / (input_shape[3] * self.patch_size[0] * self.patch_size[1])),
+      trainable=False)
+
+    window_size = input_shape[3] * self.patch_size[0] * self.patch_size[1]
+    self.variance_correction = window_size / (window_size - 1)
+
+    if self.use_bias:
+      self.bias = BiasAdd(
+        initializer=self.bias_initializer,
+        regularizer=self.bias_regularizer,
+        constraint=self.bias_constraint)
+
+    if self.activation is not None:
+      self.act = keras.layers.Activation(self.activation)
