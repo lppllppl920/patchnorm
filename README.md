@@ -1,6 +1,6 @@
 # Patch-normalized Convolution
 
-![patch_norm](patch_norm.jpg "patch_norm")
+![patchnorm](patchnorm.png "patchnorm")
 
 Implementation of patch-normalized convolutional layers in PyTorch and Tensorflow Keras.
 
