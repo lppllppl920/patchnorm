@@ -92,12 +92,12 @@ class NaivePatchNormConv2D(keras.layers.Layer):
                                 shape=(input_shape[3],) if self.channel_wise else (1,),
                                 dtype=self.dtype,
                                 trainable=True,
-                                initializer=tf.constant_initializer(0))
+                                initializer='zeros')
     self.gamma = self.add_weight('gamma',
                                  shape=(input_shape[3],) if self.channel_wise else (1,),
                                  dtype=self.dtype,
                                  trainable=True,
-                                 initializer=tf.constant_initializer(1))
+                                 initializer='ones')
 
     self.conv = keras.layers.Conv2D(
       filters=self.filters,
@@ -137,6 +137,7 @@ class NaivePatchNormConv2D(keras.layers.Layer):
 
     # (N, H', W', 1, 1, 1)
     centered = (patches - means) / tf.sqrt(tf.square(stds) + self.epsilon)
+    
     shifted = tf.reshape(self.gamma, (1, 1, 1, 1, 1, -1)) * centered + tf.reshape(self.beta, (1, 1, 1, 1, 1, -1))
 
     # (N, H', h, W', w, C)
@@ -255,12 +256,12 @@ class PatchNormConv2D(NaivePatchNormConv2D):
                                 shape=(input_shape[3],) if self.channel_wise else (1,),
                                 dtype=self.dtype,
                                 trainable=True,
-                                initializer=tf.constant_initializer(0))
+                                initializer='zeros')
     self.gamma = self.add_weight('gamma',
                                  shape=(input_shape[3],) if self.channel_wise else (1,),
                                  dtype=self.dtype,
                                  trainable=True,
-                                 initializer=tf.constant_initializer(1))
+                                 initializer='ones')
 
     self.conv = keras.layers.Conv2D(
       filters=self.filters,
@@ -299,6 +300,8 @@ class PatchNormConv2D(NaivePatchNormConv2D):
 
   def call(self, x, training=False):
     """Implement the patch norm operation using Xingtong's more efficient method.
+
+    # todo: make more efficient for non-channel-wise runs
 
     """
     # (N, H', W', 1)
@@ -398,10 +401,12 @@ class PatchNormConv2D(NaivePatchNormConv2D):
     return out
 
 
-class DepthwisePatchNormConv2D(PatchNormConv2D):
+class DepthwisePatchNormConv2D(NaivePatchNormConv2D):
+  """Note: currently broken"""
+  
   def __init__(
       self,
-      *args,
+      kernel_size,
       depth_multiplier=1,
       depthwise_initializer='glorot_uniform',
       depthwise_regularizer=None,
@@ -417,51 +422,72 @@ class DepthwisePatchNormConv2D(PatchNormConv2D):
     kwargs['kernel_regularizer'] = depthwise_regularizer
     kwargs['kernel_constraint'] = depthwise_constraint
 
-    super().__init__(*args, **kwargs)
+    super().__init__(1, kernel_size, **kwargs)
   
   def build(self, input_shape):
     self.beta = self.add_weight('beta',
                                 shape=(input_shape[3],) if self.channel_wise else (1,),
                                 dtype=self.dtype,
                                 trainable=True,
-                                initializer=tf.constant_initializer(0))
+                                initializer='zeros')
     self.gamma = self.add_weight('gamma',
                                  shape=(input_shape[3],) if self.channel_wise else (1,),
                                  dtype=self.dtype,
                                  trainable=True,
-                                 initializer=tf.constant_initializer(1))
+                                 initializer='ones')
 
-    # todo: generalizer adding the conv layer over different types, etc
     self.conv = keras.layers.DepthwiseConv2D(
       kernel_size=self.kernel_size,
-      strides=self.strides,
-      padding=self.padding,
+      strides=self.kernel_size,
+      padding='valid',
       depth_multiplier=self.depth_multiplier,
-      activation=None,
-      use_bias=False,
+      activation=self.activation,
+      use_bias=self.use_bias,
       depthwise_initializer=self.depthwise_initializer,
+      bias_initializer=self.bias_initializer,
       depthwise_regularizer=self.depthwise_regularizer,
+      bias_regularizer=self.bias_regularizer,
       activity_regularizer=self.activity_regularizer,
-      depthwise_constraint=self.depthwise_constraint)
+      depthwise_constraint=self.depthwise_constraint,
+      bias_constraint=self.bias_constraint)
+
+    # # todo: generalizer adding the conv layer over different types, etc
+    # self.conv = keras.layers.DepthwiseConv2D(
+    #   kernel_size=self.kernel_size,
+    #   strides=self.strides,
+    #   padding=self.padding,
+    #   depth_multiplier=self.depth_multiplier,
+    #   activation=None,
+    #   use_bias=False,
+    #   depthwise_initializer=self.depthwise_initializer,
+    #   depthwise_regularizer=self.depthwise_regularizer,
+    #   activity_regularizer=self.activity_regularizer,
+    #   depthwise_constraint=self.depthwise_constraint)
     
-    self.box = keras.layers.Conv2D(
-      filters=1,
-      kernel_size=self.patch_size,
-      strides=self.strides,
-      padding=self.padding,
-      activation=None,
-      use_bias=False,
-      kernel_initializer=keras.initializers.Constant(1 / (input_shape[3] * self.patch_size[0] * self.patch_size[1])),
-      trainable=False)
+    # self.box = keras.layers.Conv2D(
+    #   filters=1,
+    #   kernel_size=self.patch_size,
+    #   strides=self.strides,
+    #   padding=self.padding,
+    #   activation=None,
+    #   use_bias=False,
+    #   kernel_initializer=keras.initializers.Constant(1 / (input_shape[3] * self.patch_size[0] * self.patch_size[1])),
+    #   trainable=False)
 
-    window_size = input_shape[3] * self.patch_size[0] * self.patch_size[1]
-    self.variance_correction = window_size / (window_size - 1)
+    # window_size = input_shape[3] * self.patch_size[0] * self.patch_size[1]
+    # self.variance_correction = window_size / (window_size - 1)
 
-    if self.use_bias:
-      self.bias = BiasAdd(
-        initializer=self.bias_initializer,
-        regularizer=self.bias_regularizer,
-        constraint=self.bias_constraint)
+    # if self.use_bias:
+    #   self.bias = BiasAdd(
+    #     initializer=self.bias_initializer,
+    #     regularizer=self.bias_regularizer,
+    #     constraint=self.bias_constraint)
 
-    if self.activation is not None:
-      self.act = keras.layers.Activation(self.activation)
+    # if self.activation is not None:
+    #   self.act = keras.layers.Activation(self.activation)
+
+
+
+
+
+
