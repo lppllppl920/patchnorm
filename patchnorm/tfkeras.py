@@ -28,7 +28,7 @@ class NaivePatchNormConv2D(keras.layers.Layer):
                bias_constraint=None,
                patch_size=None,
                epsilon=0.001,
-               channel_wise=False,
+               channel_wise=True,
                simple=None,     # included for backward compatibility
                axis=None,       # included for backward compatibility
                **kwargs):
