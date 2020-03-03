@@ -27,7 +27,7 @@ class NaivePatchNormConv2D(keras.layers.Layer):
                kernel_constraint=None,
                bias_constraint=None,
                patch_size=None,
-               epsilon=0.001,
+               epsilon=0.00001,
                channel_wise=False,
                use_nu=False,
                channel_wise_nu=False,
@@ -127,8 +127,11 @@ class NaivePatchNormConv2D(keras.layers.Layer):
       bias_constraint=self.bias_constraint)
 
   def _get_receptive_field(self):
-    return (self.dilation_rate * (self.kernel_size[0] + 1) - 1,
-            self.dilation_rate * (self.kernel_size[1] + 1) - 1)
+    if self.dilation_rate is None or self.dilation_rate == 1:
+      return self.kernel_size
+    else:
+      return (self.dilation_rate * (self.kernel_size[0] + 1) - 1,
+              self.dilation_rate * (self.kernel_size[1] + 1) - 1)
     
   def call(self, x):
     # (N, H', W', h * w * C)
