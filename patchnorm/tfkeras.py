@@ -28,9 +28,11 @@ class NaivePatchNormConv2D(keras.layers.Layer):
                bias_constraint=None,
                patch_size=None,
                epsilon=0.001,
-               channel_wise=True,
-               simple=None,     # included for backward compatibility
-               axis=None,       # included for backward compatibility
+               channel_wise=False,
+               use_nu=False,
+               channel_wise_nu=False,
+               simple=None,
+               axis=None,
                **kwargs):
     """Patch-normalized convolution using extract_patches.
 
@@ -73,6 +75,8 @@ class NaivePatchNormConv2D(keras.layers.Layer):
     self.axis = 3
     self.epsilon = epsilon
     self.channel_wise = channel_wise if simple is None else not simple
+    self.use_nu = use_nu
+    self.channel_wise_nu = channel_wise_nu
     self.simple = simple
     self.axis = axis
 
@@ -98,6 +102,13 @@ class NaivePatchNormConv2D(keras.layers.Layer):
                                  dtype=self.dtype,
                                  trainable=True,
                                  initializer='ones')
+    if self.use_nu:
+      # could be (C,), but only in the inefficient implementation, otherwise has to be (filters,)
+      self.nu = self.add_weight('nu',
+                                shape=(input_shape[3],) if self.channel_wise_nu else (1,),
+                                dtype=self.dtype,
+                                trainable=True,
+                                initializer='zeros')
 
     self.conv = keras.layers.Conv2D(
       filters=self.filters,
@@ -135,8 +146,12 @@ class NaivePatchNormConv2D(keras.layers.Layer):
     means = tf.math.reduce_mean(patches, axis=(3, 4, 5), keepdims=True)
     stds = tf.math.reduce_std(patches, axis=(3, 4, 5), keepdims=True)
 
-    # (N, H', W', 1, 1, 1)
-    centered = (patches - means) / tf.sqrt(tf.square(stds) + self.epsilon)
+    # (N, H', W', 1, 1, 1) or (N, H', W', 1, 1, C) if channel_wise_nu
+    if self.use_nu:
+      nu = tf.reshape(self.nu, (1, 1, 1, -1))
+      centered = (patches - means) / tf.sqrt(tf.square(stds) + tf.square(nu) + self.epsilon)
+    else:
+      centered = (patches - means) / tf.sqrt(tf.square(stds) + self.epsilon)
     
     shifted = tf.reshape(self.gamma, (1, 1, 1, 1, 1, -1)) * centered + tf.reshape(self.beta, (1, 1, 1, 1, 1, -1))
 
@@ -262,7 +277,14 @@ class PatchNormConv2D(NaivePatchNormConv2D):
                                  dtype=self.dtype,
                                  trainable=True,
                                  initializer='ones')
-
+    if self.use_nu:
+      # could be (C,), but only in the inefficient implementation, otherwise has to be (filters,)
+      self.nu = self.add_weight('nu',
+                                shape=(self.filters,) if self.channel_wise_nu else (1,),
+                                dtype=self.dtype,
+                                trainable=True,
+                                initializer='zeros')
+      
     self.conv = keras.layers.Conv2D(
       filters=self.filters,
       kernel_size=self.kernel_size,
@@ -304,11 +326,15 @@ class PatchNormConv2D(NaivePatchNormConv2D):
     # todo: make more efficient for non-channel-wise runs
 
     """
-    # (N, H', W', 1)
+    # (N, H', W', 1) or (N, H', W', filters) if channel_wise_nu
     means = self.box(x)
     square_means = self.box(tf.math.square(x))
-    stds = tf.math.sqrt((square_means - tf.math.square(means)) + self.epsilon)
-
+    if self.use_nu:
+      nu = tf.reshape(self.nu, (1, 1, 1, -1))
+      stds = tf.math.sqrt((square_means - tf.math.square(means)) + tf.square(nu) + self.epsilon)
+    else:
+      stds = tf.math.sqrt((square_means - tf.math.square(means)) + self.epsilon)
+    
     # (N, H', W', filters)
     conv = self.conv(tf.reshape(self.gamma, (1, 1, 1, -1)) * x) / stds
    
