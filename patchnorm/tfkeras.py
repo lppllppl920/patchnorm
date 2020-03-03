@@ -27,7 +27,7 @@ class NaivePatchNormConv2D(keras.layers.Layer):
                kernel_constraint=None,
                bias_constraint=None,
                patch_size=None,
-               epsilon=0.00001,
+               epsilon=0.001,
                channel_wise=False,
                use_nu=False,
                channel_wise_nu=False,
@@ -324,9 +324,7 @@ class PatchNormConv2D(NaivePatchNormConv2D):
       self.act = keras.layers.Activation(self.activation)
 
   def call(self, x, training=False):
-    """Implement the patch norm operation using Xingtong's more efficient method.
-
-    # todo: make more efficient for non-channel-wise runs
+    """Implement the patch norm operation efficiently.
 
     """
     # (N, H', W', 1) or (N, H', W', filters) if channel_wise_nu
@@ -337,21 +335,28 @@ class PatchNormConv2D(NaivePatchNormConv2D):
       stds = tf.math.sqrt((square_means - tf.math.square(means)) + tf.square(nu) + self.epsilon)
     else:
       stds = tf.math.sqrt((square_means - tf.math.square(means)) + self.epsilon)
-    
-    # (N, H', W', filters)
-    conv = self.conv(tf.reshape(self.gamma, (1, 1, 1, -1)) * x) / stds
+
+    if self.channel_wise or True:
+      # (N, H', W', filters)
+      conv = self.conv(tf.reshape(self.gamma, (1, 1, 1, -1)) * x) / stds
    
-    # (1, 1, 1, filters)
-    gamma_kernel_sum = tf.reduce_sum(tf.reshape(self.gamma, (1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2), keepdims=True)
+      # (1, 1, 1, filters)
+      gamma_kernel_sum = tf.reduce_sum(tf.reshape(self.gamma, (1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2), keepdims=True)
     
-    # (N, H', W', filters)
-    kernel_weighted_means = means * gamma_kernel_sum / stds
+      # (N, H', W', filters)
+      kernel_weighted_means = means * gamma_kernel_sum / stds
 
-    # (1, 1, 1, filters)
-    beta_kernel_sum = tf.reduce_sum(tf.reshape(self.beta, (1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2), keepdims=True)
+      # (1, 1, 1, filters)
+      beta_kernel_sum = tf.reduce_sum(tf.reshape(self.beta, (1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2), keepdims=True)
 
-    # (N, H', W', filters)
-    x = conv - kernel_weighted_means + beta_kernel_sum
+      # (N, H', W', filters)
+      x = conv - kernel_weighted_means + beta_kernel_sum
+    else:
+      raise NotImplementedError('not working, needs debugging. Other option may be slower but works.')
+      assert not self.channel_wise_nu
+      conv = self.gamma * self.conv(x) / stds
+      kernel_sum = tf.reshape(tf.reduce_sum(self.conv.kernel, axis=(0, 1, 2)), (1, 1, 1, -1))
+      x = self.gamma * conv / stds + (self.beta - means * self.gamma / stds) * kernel_sum
 
     if self.use_bias:
       x = self.bias(x)
