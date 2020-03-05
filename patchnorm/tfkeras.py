@@ -12,6 +12,7 @@ logger = tf.get_logger()
 
 class NaivePatchNormConv2D(keras.layers.Layer):
   dims = 2
+
   def __init__(self,
                filters,
                kernel_size,
@@ -37,24 +38,28 @@ class NaivePatchNormConv2D(keras.layers.Layer):
                **kwargs):
     """Patch-normalized convolution using extract_patches.
 
-    This is a memory inefficient implementation of the patch-normalized convolution and is included for edification. From the Tensorflow docs:
+    This is a memory inefficient implementation of the patch-normalized convolution and is included for edification.
+
+    The arguments below are mostly the same as Conv2D in TF, with some exceptions.
 
     :param filters: Integer, the dimensionality of the output space (i.e. the number of output filters in the convolution)
     :param kernel_size: An integer or tuple/list of 2 integers, specifying the height and width of the 2D convolution window. Can be a single integer to specify the same value for all spatial dimensions.
     :param strides: An integer or tuple/list of 2 integers, specifying the strides of the convolution along the height and width. Can be a single integer to specify the same value for all spatial dimensions. Specifying any stride value != 1 is incompatible with specifying any `dilation_rate` value != 1.
     :param padding: one of `"valid"` or `"same"` (case-insensitive).
-    :param activation: 
-    :param use_bias: 
-    :param kernel_initializer: 
-    :param bias_initializer: 
-    :param kernel_regularizer: 
-    :param bias_regularizer: 
-    :param activity_regularizer: 
-    :param kernel_constraint: 
-    :param bias_constraint: 
-    :param patch_size: 
+    :param activationActivation function to use. If you don't specify anything, no activation is applied.
+    :param use_bias: Boolean, whether the layer uses a bias vector
+    :param kernel_initializer: Initializer for the `kernel` weights matrix.
+    :param bias_initializer: Initializer for the bias vector.
+    :param kernel_regularizer: Regularizer function applied to the kernel weights matrix.
+    :param bias_regularizer: Regularizer function applied to the bias vector.
+    :param activity_regularizer: Regularizer function applied to the output of the layer (its "activation").
+    :param kernel_constraint: Constraint function applied to the kernel matrix.
+    :param bias_constraint: Constraint function applied to the bias vector.
+    :param patch_size: size of the patch. If unspecified, the kernel size is used.
     :param epsilon: value of epsilon to use.
     :param channel_wise: use per-channel beta and gamma parameters.
+    :param use_nu: untested, learn an additional epsilon-like parameter
+    
 
     """
     super().__init__(**kwargs)
@@ -185,7 +190,9 @@ class NaivePatchNormConv2D(keras.layers.Layer):
                    'axis': self.axis,
                    'patch_size': self.patch_size,
                    'channel_wise': self.channel_wise,
-                   'simple': self.simple})
+                   'simple': self.simple,
+                   'use_nu': self.use_nu,
+                   'channel_wise_nu': self.channel_wise_nu})
     return config
 
   def set_weights_from_conv(self, weights):
