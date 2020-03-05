@@ -11,6 +11,7 @@ logger = tf.get_logger()
 
 
 class NaivePatchNormConv2D(keras.layers.Layer):
+  dims = 2
   def __init__(self,
                filters,
                kernel_size,
@@ -59,11 +60,11 @@ class NaivePatchNormConv2D(keras.layers.Layer):
     super().__init__(**kwargs)
 
     self.filters = filters
-    self.kernel_size = utils.tuplify(kernel_size, 2)
-    self.strides = utils.tuplify(strides, 2)
+    self.kernel_size = utils.tuplify(kernel_size, self.dims)
+    self.strides = utils.tuplify(strides, self.dims)
     self.padding = padding
     self.activation = activation
-    self.dilation_rate = dilation_rate
+    self.dilation_rate = utils.tuplify(dilation_rate, self.dims)
     self.use_bias = use_bias
     self.kernel_initializer = kernel_initializer
     self.bias_initializer = bias_initializer
@@ -83,13 +84,13 @@ class NaivePatchNormConv2D(keras.layers.Layer):
     self.patch_size = self._get_receptive_field() if patch_size is None else utils.tuplify(patch_size, 2)
 
     assert axis is None or axis == 3, 'axis == 3 or None'
-    assert self.padding == 'same' or self.kernel_size == (1, 1), 'todo: padding != same, especially for patch_size != kernel_size'
-    if self.kernel_size == (1, 1):
+    assert self.padding == 'same' or self.kernel_size == (1,) * self.dims, 'todo: padding != same, especially for patch_size != kernel_size'
+    if self.kernel_size == (1,) * self.dims:
       self.padding = 'same'
 
-    if self.dilation_rate != 1:
+    if self.dilation_rate != (1,) * self.dims:
       assert self.padding.lower() == 'same'
-      assert self.strides == (1, 1)
+      assert self.strides == (1,) * self.dims
 
   def build(self, input_shape):
     self.beta = self.add_weight('beta',
@@ -127,11 +128,12 @@ class NaivePatchNormConv2D(keras.layers.Layer):
       bias_constraint=self.bias_constraint)
 
   def _get_receptive_field(self):
-    if self.dilation_rate is None or self.dilation_rate == 1:
+    if self.dilation_rate == (1,) * self.dims:
       return self.kernel_size
-    else:
-      return (self.dilation_rate * (self.kernel_size[0] + 1) - 1,
-              self.dilation_rate * (self.kernel_size[1] + 1) - 1)
+    receptive_field = []
+    for i in range(self.dims):
+      receptive_field.append(self.dilation_rate[i] * (self.kernel_size[i] + 1) - 1)
+    return receptive_field
     
   def call(self, x):
     # (N, H', W', h * w * C)
@@ -267,7 +269,7 @@ class BiasAdd(keras.layers.Layer):
                    'constraint': self.constraint})
     return config
 
-  
+    
 class PatchNormConv2D(NaivePatchNormConv2D):
   def build(self, input_shape):
     self.beta = self.add_weight('beta',
@@ -311,9 +313,6 @@ class PatchNormConv2D(NaivePatchNormConv2D):
       kernel_initializer=keras.initializers.Constant(1 / (input_shape[3] * self.patch_size[0] * self.patch_size[1])),
       trainable=False)
 
-    window_size = input_shape[3] * self.patch_size[0] * self.patch_size[1]
-    self.variance_correction = window_size / (window_size - 1)
-
     if self.use_bias:
       self.bias = BiasAdd(
         initializer=self.bias_initializer,
@@ -341,13 +340,15 @@ class PatchNormConv2D(NaivePatchNormConv2D):
       conv = self.conv(tf.reshape(self.gamma, (1, 1, 1, -1)) * x) / stds
    
       # (1, 1, 1, filters)
-      gamma_kernel_sum = tf.reduce_sum(tf.reshape(self.gamma, (1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2), keepdims=True)
+      gamma_kernel_sum = tf.reduce_sum(tf.reshape(self.gamma, (1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2))
+      gamma_kernel_sum = tf.reshape(gamma_kernel_sum, (1, 1, 1, -1))
     
       # (N, H', W', filters)
       kernel_weighted_means = means * gamma_kernel_sum / stds
 
       # (1, 1, 1, filters)
-      beta_kernel_sum = tf.reduce_sum(tf.reshape(self.beta, (1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2), keepdims=True)
+      beta_kernel_sum = tf.reduce_sum(tf.reshape(self.beta, (1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2))
+      beta_kernel_sum = tf.reshape(beta_kernel_sum, (1, 1, 1, -1))
 
       # (N, H', W', filters)
       x = conv - kernel_weighted_means + beta_kernel_sum
@@ -508,9 +509,6 @@ class DepthwisePatchNormConv2D(NaivePatchNormConv2D):
     #   kernel_initializer=keras.initializers.Constant(1 / (input_shape[3] * self.patch_size[0] * self.patch_size[1])),
     #   trainable=False)
 
-    # window_size = input_shape[3] * self.patch_size[0] * self.patch_size[1]
-    # self.variance_correction = window_size / (window_size - 1)
-
     # if self.use_bias:
     #   self.bias = BiasAdd(
     #     initializer=self.bias_initializer,
@@ -521,7 +519,102 @@ class DepthwisePatchNormConv2D(NaivePatchNormConv2D):
     #   self.act = keras.layers.Activation(self.activation)
 
 
+class BiasAdd3D(BiasAdd):
+  def call(self, x):
+    x += tf.reshape(self.bias, (1, 1, 1, 1, -1))
+    return x
 
 
+class PatchNormConv3D(PatchNormConv2D):
+  dims = 3
+  
+  def build(self, input_shape):
+    self.beta = self.add_weight('beta',
+                                shape=(input_shape[3],) if self.channel_wise else (1,),
+                                dtype=self.dtype,
+                                trainable=True,
+                                initializer='zeros')
+    self.gamma = self.add_weight('gamma',
+                                 shape=(input_shape[3],) if self.channel_wise else (1,),
+                                 dtype=self.dtype,
+                                 trainable=True,
+                                 initializer='ones')
+    if self.use_nu:
+      # could be (C,), but only in the inefficient implementation, otherwise has to be (filters,)
+      self.nu = self.add_weight('nu',
+                                shape=(input_shape[3],) if self.channel_wise_nu else (1,),
+                                dtype=self.dtype,
+                                trainable=True,
+                                initializer='zeros')
+      
+    self.conv = keras.layers.Conv3D(
+      filters=self.filters,
+      kernel_size=self.kernel_size,
+      strides=self.strides,
+      padding=self.padding,
+      dilation_rate=self.dilation_rate,
+      activation=None,
+      use_bias=False,
+      kernel_initializer=self.kernel_initializer,
+      kernel_regularizer=self.kernel_regularizer,
+      activity_regularizer=self.activity_regularizer,
+      kernel_constraint=self.kernel_constraint)
+    
+    self.box = keras.layers.Conv3D(
+      filters=1,
+      kernel_size=self.patch_size,
+      strides=self.strides,
+      padding=self.padding,
+      activation=None,
+      use_bias=False,
+      kernel_initializer=keras.initializers.Constant(1 / (input_shape[3] * self.patch_size[0] * self.patch_size[1] * self.patch_size[2])),
+      trainable=False)
 
+    if self.use_bias:
+      self.bias = BiasAdd3D(
+        initializer=self.bias_initializer,
+        regularizer=self.bias_regularizer,
+        constraint=self.bias_constraint)
 
+    if self.activation is not None:
+      self.act = keras.layers.Activation(self.activation)
+
+  def call(self, x, training=False):
+    """Implement the patch norm operation in 3D.
+
+    """
+    # (N, H', W', D', 1) or (N, H', W', D', filters) if channel_wise_nu
+    means = self.box(x)
+    square_means = self.box(tf.math.square(x))
+    if self.use_nu:
+      nu = tf.reshape(self.nu, (1, 1, 1, -1))
+      stds = tf.math.sqrt((square_means - tf.math.square(means)) + tf.square(nu) + self.epsilon)
+    else:
+      stds = tf.math.sqrt((square_means - tf.math.square(means)) + self.epsilon)
+
+    raise NotImplementedError('TODO: finish PNC 3D')
+
+    # (N, H', W', D', filters)
+    conv = self.conv(tf.reshape(self.gamma, (1, 1, 1, 1, -1)) * x) / stds
+    
+    # (1, 1, 1, 1, filters)
+    gamma_kernel_sum = tf.reduce_sum(tf.reshape(self.gamma, (1, 1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2, 3))
+    gamma_kernel_sum = tf.reshape(gamma_kernel_sum, (1, 1, 1, 1, -1))
+    
+    # (N, H', W', filters)
+    kernel_weighted_means = means * gamma_kernel_sum / stds
+    
+    # (1, 1, 1, 1, filters)
+    beta_kernel_sum = tf.reduce_sum(tf.reshape(self.beta, (1, 1, 1, -1, 1)) * self.conv.kernel, axis=(0, 1, 2, 3))
+    beta_kernel_sum = tf.reshape(beta_kernel_sum)
+    
+    # (N, H', W', filters)
+    x = conv - kernel_weighted_means + beta_kernel_sum
+
+    if self.use_bias:
+      x = self.bias(x)
+
+    if self.activation is not None:
+      x = self.act(x)
+
+    return x
