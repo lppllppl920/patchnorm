@@ -21,6 +21,11 @@ python3 -m pip install -U git+https://github.com/benjamindkilleen/patchnorm.git 
 This package contains both Tensorflow Keras and PyTorch implementations of the PatchNorm layers.
 They can be imported independently of one another, for example:
 ```python
-from patchnorm.tfkeras import PatchNormConv2D
 from patchnorm.pytorch import PatchNormConv2D
+from patchnorm.pytorch import PatchNormConv3D
+```
+or
+```python
+from patchnorm.tfkeras import PatchNormConv2D
+from patchnorm.tfkeras import PatchNormConv3D
 ```
